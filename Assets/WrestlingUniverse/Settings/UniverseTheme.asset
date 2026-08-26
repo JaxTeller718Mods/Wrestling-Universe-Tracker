@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8a094d48a510fb4da17466db6b754c3, type: 3}
+  m_Name: UniverseTheme
+  m_EditorClassIdentifier: Assembly-CSharp::WrestlingUniverse.UI.UniverseTheme
+  background: {r: 0.019607844, g: 0.03529412, b: 0.078431375, a: 1}
+  panel: {r: 0.03529412, g: 0.05882353, b: 0.11372549, a: 0.9607843}
+  panelRaised: {r: 0.05490196, g: 0.09019608, b: 0.15686275, a: 1}
+  cyan: {r: 0.1764706, g: 0.74509805, b: 0.9019608, a: 1}
+  gold: {r: 0.9411765, g: 0.74509805, b: 0.16470589, a: 1}
+  primaryText: {r: 0.9490196, g: 0.9647059, b: 0.98039216, a: 1}
+  secondaryText: {r: 0.5568628, g: 0.627451, b: 0.70980394, a: 1}
