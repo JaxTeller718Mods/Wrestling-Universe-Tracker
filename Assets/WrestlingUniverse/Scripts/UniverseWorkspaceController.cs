@@ -81,6 +81,7 @@ namespace WrestlingUniverse.UI
         private Text titleHistoryNameText;
         private GameObject brandsView;
         private GameObject showsView;
+        private GameObject specialsView;
         private GameObject locationsView;
         private GameObject locationCreationPanel;
         private Transform locationGrid;
@@ -109,6 +110,47 @@ namespace WrestlingUniverse.UI
         private Text brandInfoRoster;
         private BrandRecord editingBrand;
         private string selectedBrandImagePath;
+        private GameObject tvShowCreationPanel;
+        private Transform tvShowGrid;
+        private Text emptyTvShowsText;
+        private Text tvShowCountText;
+        private InputField tvShowNameInput;
+        private Dropdown tvShowFrequencyDropdown;
+        private Dropdown tvShowDayDropdown;
+        private GameObject tvShowBrandMenu;
+        private Text tvShowBrandCaption;
+        private GameObject tvShowImageHost;
+        private Text tvShowImageStatus;
+        private Text tvShowValidationText;
+        private Text tvShowFormTitle;
+        private Text tvShowSaveLabel;
+        private TvShowRecord editingTvShow;
+        private string selectedTvShowImagePath;
+        private readonly List<string> selectedTvShowBrandIds = new List<string>();
+        private List<BrandRecord> availableTvShowBrands = new List<BrandRecord>();
+        private GameObject specialCreationPanel;
+        private Transform specialGrid;
+        private Text emptySpecialsText;
+        private Text specialCountText;
+        private InputField specialNameInput;
+        private Dropdown specialMonthDropdown;
+        private Dropdown specialWeekDropdown;
+        private Dropdown specialDayDropdown;
+        private GameObject specialBrandMenu;
+        private Text specialBrandCaption;
+        private GameObject specialImageHost;
+        private Text specialImageStatus;
+        private Text specialValidationText;
+        private Text specialFormTitle;
+        private Text specialSaveLabel;
+        private SpecialRecord editingSpecial;
+        private string selectedSpecialImagePath;
+        private readonly List<string> selectedSpecialBrandIds = new List<string>();
+        private List<BrandRecord> availableSpecialBrands = new List<BrandRecord>();
+        private static readonly string[] ShowFrequencies = { "Weekly", "Bi-Weekly", "Monthly", "Special" };
+        private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+        private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+        private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
         private static readonly string[] Genders = { "Male", "Female", "Neutral" };
@@ -180,7 +222,16 @@ namespace WrestlingUniverse.UI
             ShowUniverseSetupView("BRANDS", brandsView);
             RefreshBrandCards();
         }
-        public void ShowShows() => ShowUniverseSetupView("SHOWS", showsView);
+        public void ShowTvShows()
+        {
+            ShowUniverseSetupView("TV SHOWS", showsView);
+            RefreshTvShowCards();
+        }
+        public void ShowSpecials()
+        {
+            ShowUniverseSetupView("SPECIALS", specialsView);
+            RefreshSpecialCards();
+        }
         public void ShowLocations()
         {
             ShowUniverseSetupView("LOCATIONS", locationsView);
@@ -218,10 +269,13 @@ namespace WrestlingUniverse.UI
             if (titleHistoryPanel != null) titleHistoryPanel.SetActive(false);
             if (brandsView != null) brandsView.SetActive(false);
             if (showsView != null) showsView.SetActive(false);
+            if (specialsView != null) specialsView.SetActive(false);
             if (locationsView != null) locationsView.SetActive(false);
             if (locationCreationPanel != null) locationCreationPanel.SetActive(false);
             if (brandCreationPanel != null) brandCreationPanel.SetActive(false);
             if (brandInfoPanel != null) brandInfoPanel.SetActive(false);
+            if (tvShowCreationPanel != null) tvShowCreationPanel.SetActive(false);
+            if (specialCreationPanel != null) specialCreationPanel.SetActive(false);
             var navigation = sectionTitleText.transform.root.Find("Background/WorkspaceNavigation");
             if (navigation == null) return;
             foreach (Transform child in navigation)
@@ -261,8 +315,10 @@ namespace WrestlingUniverse.UI
             brandsView = CreateBrandsView(workspace);
             brandCreationPanel = CreateBrandCreationPanel(workspace);
             brandInfoPanel = CreateBrandInfoPanel(workspace);
-            showsView = CreateUniverseSetupView(workspace, "ShowsView", "SHOWS", "+  CREATE SHOW",
-                "NO SHOWS CREATED\n\nWeekly shows and major PPV / PLE events such as WrestleMania will be created and edited here.");
+            showsView = CreateTvShowsView(workspace);
+            tvShowCreationPanel = CreateTvShowCreationPanel(workspace);
+            specialsView = CreateSpecialsView(workspace);
+            specialCreationPanel = CreateSpecialCreationPanel(workspace);
             locationsView = CreateLocationsView(workspace);
             locationCreationPanel = CreateLocationCreationPanel(workspace);
             rosterView.SetActive(false);
@@ -271,9 +327,11 @@ namespace WrestlingUniverse.UI
             teamCreationPanel.SetActive(false);
             titlesView.SetActive(false); titleCreationPanel.SetActive(false);
             titleHistoryPanel.SetActive(false);
-            brandsView.SetActive(false); showsView.SetActive(false); locationsView.SetActive(false);
+            brandsView.SetActive(false); showsView.SetActive(false); specialsView.SetActive(false); locationsView.SetActive(false);
             locationCreationPanel.SetActive(false);
             brandCreationPanel.SetActive(false); brandInfoPanel.SetActive(false);
+            tvShowCreationPanel.SetActive(false);
+            specialCreationPanel.SetActive(false);
         }
 
         private GameObject CreateUniverseSetupView(Transform workspace, string objectName, string heading, string action, string emptyMessage)
@@ -365,6 +423,111 @@ namespace WrestlingUniverse.UI
             var rosterPanel = CreateRuntimePanel("AssignedRoster", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.04f, .08f), new Vector2(.96f, .72f));
             brandInfoRoster = CreateRuntimeText("Roster", rosterPanel.transform, "NO ROSTER MEMBERS ASSIGNED", 18, new Color32(142, 160, 181, 255),
                 TextAnchor.UpperLeft, new Vector2(.05f, .08f), new Vector2(.95f, .92f), FontStyle.Bold);
+            return panel;
+        }
+
+        private GameObject CreateTvShowsView(Transform workspace)
+        {
+            var view = CreateRuntimePanel("TvShowsView", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("TvShowsToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
+            tvShowCountText = CreateRuntimeText("ShowCount", toolbar.transform, "TV SHOWS  /  0", 17, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+            var create = CreateRuntimeButton("CreateTvShowButton", toolbar.transform, "+  CREATE TV SHOW", new Vector2(.76f, .16f), new Vector2(.975f, .84f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); create.onClick.AddListener(ShowTvShowCreation);
+            var table = CreateRuntimePanel("TvShowTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
+            tvShowGrid = new GameObject("TvShowCardGrid", typeof(RectTransform), typeof(GridLayoutGroup)).transform;
+            tvShowGrid.SetParent(table.transform, false); SetRuntimeRect(tvShowGrid.GetComponent<RectTransform>(), new Vector2(.02f, .05f), new Vector2(.98f, .95f));
+            var grid = tvShowGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(350, 190); grid.spacing = new Vector2(20, 18);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 4; grid.childAlignment = TextAnchor.UpperCenter;
+            emptyTvShowsText = CreateRuntimeText("EmptyShows", table.transform, "NO TV SHOWS CREATED\n\nCreate the first recurring show for this universe.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private GameObject CreateTvShowCreationPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("TvShowCreationPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            tvShowFormTitle = CreateRuntimeText("Title", panel.transform, "CREATE TV SHOW", 27, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .84f), new Vector2(.55f, .98f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToTvShowsButton", panel.transform, "BACK TO TV SHOWS", new Vector2(.80f, .86f), new Vector2(.965f, .96f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowTvShows);
+            tvShowNameInput = CreateRuntimeInput("ShowName", panel.transform, "SHOW NAME", "Monday Night Raw", new Vector2(.035f, .63f), new Vector2(.60f, .81f));
+            tvShowFrequencyDropdown = CreateRuntimeDropdown("Frequency", panel.transform, "FREQUENCY", ShowFrequencies, 0, new Vector2(.035f, .41f), new Vector2(.31f, .59f));
+            tvShowDayDropdown = CreateRuntimeDropdown("DayOfWeek", panel.transform, "DAY OF THE WEEK", WeekDays, 1, new Vector2(.33f, .41f), new Vector2(.60f, .59f));
+            var brandSelector = CreateRuntimeButton("ParentBrandSelector", panel.transform, string.Empty, new Vector2(.035f, .19f), new Vector2(.60f, .37f),
+                new Color32(5, 11, 23, 255), Color.white);
+            var oldLabel = brandSelector.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
+            CreateRuntimeText("FieldLabel", brandSelector.transform, "PARENT BRANDS", 12, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.04f, .58f), new Vector2(.96f, .94f), FontStyle.Bold);
+            tvShowBrandCaption = CreateRuntimeText("Value", brandSelector.transform, "Select one or more brands", 17, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.04f, .06f), new Vector2(.90f, .62f));
+            CreateRuntimeText("Arrow", brandSelector.transform, "▼", 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.91f, .08f), new Vector2(.98f, .62f)); brandSelector.onClick.AddListener(ToggleTvShowBrandMenu);
+            tvShowBrandMenu = CreateRuntimePanel("ParentBrandDropdown", brandSelector.transform, new Color32(5, 9, 20, 255), new Vector2(0, -1.9f), new Vector2(1, 0));
+            tvShowBrandMenu.SetActive(false);
+            tvShowImageHost = CreateRuntimePanel("ShowImage", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.64f, .28f), new Vector2(.965f, .81f));
+            var choose = CreateRuntimeButton("ChooseShowImage", tvShowImageHost.transform, "+  CHOOSE SHOW IMAGE", new Vector2(.06f, .05f), new Vector2(.94f, .22f),
+                new Color32(25, 45, 65, 255), Color.white); choose.onClick.AddListener(PickTvShowImage);
+            tvShowImageStatus = CreateRuntimeText("ImageStatus", panel.transform, "No image selected", 12, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.64f, .22f), new Vector2(.965f, .28f));
+            tvShowValidationText = CreateRuntimeText("Validation", panel.transform, string.Empty, 13, new Color32(255, 105, 105, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .04f), new Vector2(.70f, .17f), FontStyle.Bold);
+            var save = CreateRuntimeButton("SaveTvShowButton", panel.transform, "CREATE TV SHOW", new Vector2(.76f, .06f), new Vector2(.965f, .19f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); tvShowSaveLabel = save.transform.Find("Label").GetComponent<Text>();
+            save.onClick.AddListener(SaveTvShow);
+            return panel;
+        }
+
+        private GameObject CreateSpecialsView(Transform workspace)
+        {
+            var view = CreateRuntimePanel("SpecialsView", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("SpecialsToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
+            specialCountText = CreateRuntimeText("SpecialCount", toolbar.transform, "SPECIALS  /  0", 17, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+            var create = CreateRuntimeButton("CreateSpecialButton", toolbar.transform, "+  CREATE SPECIAL", new Vector2(.76f, .16f), new Vector2(.975f, .84f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); create.onClick.AddListener(ShowSpecialCreation);
+            var table = CreateRuntimePanel("SpecialTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
+            specialGrid = new GameObject("SpecialCardGrid", typeof(RectTransform), typeof(GridLayoutGroup)).transform;
+            specialGrid.SetParent(table.transform, false); SetRuntimeRect(specialGrid.GetComponent<RectTransform>(), new Vector2(.02f, .05f), new Vector2(.98f, .95f));
+            var grid = specialGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(350, 190); grid.spacing = new Vector2(20, 18);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 4; grid.childAlignment = TextAnchor.UpperCenter;
+            emptySpecialsText = CreateRuntimeText("EmptySpecials", table.transform, "NO SPECIALS CREATED\n\nCreate the first PLE, PPV, or special event for this universe.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private GameObject CreateSpecialCreationPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("SpecialCreationPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            specialFormTitle = CreateRuntimeText("Title", panel.transform, "CREATE SPECIAL", 27, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .84f), new Vector2(.55f, .98f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToSpecialsButton", panel.transform, "BACK TO SPECIALS", new Vector2(.80f, .86f), new Vector2(.965f, .96f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowSpecials);
+            specialNameInput = CreateRuntimeInput("SpecialName", panel.transform, "SPECIAL NAME", "WrestleMania", new Vector2(.035f, .63f), new Vector2(.60f, .81f));
+            specialMonthDropdown = CreateRuntimeDropdown("Month", panel.transform, "MONTH", Months, 0, new Vector2(.035f, .41f), new Vector2(.22f, .59f));
+            specialWeekDropdown = CreateRuntimeDropdown("Week", panel.transform, "WEEK", MonthWeeks, 0, new Vector2(.235f, .41f), new Vector2(.41f, .59f));
+            specialDayDropdown = CreateRuntimeDropdown("Day", panel.transform, "DAY", WeekDays, 0, new Vector2(.425f, .41f), new Vector2(.60f, .59f));
+            var brandSelector = CreateRuntimeButton("ParticipatingBrandSelector", panel.transform, string.Empty, new Vector2(.035f, .19f), new Vector2(.60f, .37f),
+                new Color32(5, 11, 23, 255), Color.white);
+            var oldLabel = brandSelector.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
+            CreateRuntimeText("FieldLabel", brandSelector.transform, "PARTICIPATING BRANDS", 12, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.04f, .58f), new Vector2(.96f, .94f), FontStyle.Bold);
+            specialBrandCaption = CreateRuntimeText("Value", brandSelector.transform, "Select one or more brands", 17, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.04f, .06f), new Vector2(.90f, .62f));
+            CreateRuntimeText("Arrow", brandSelector.transform, "▼", 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.91f, .08f), new Vector2(.98f, .62f)); brandSelector.onClick.AddListener(ToggleSpecialBrandMenu);
+            specialBrandMenu = CreateRuntimePanel("ParticipatingBrandDropdown", brandSelector.transform, new Color32(5, 9, 20, 255), new Vector2(0, -1.9f), new Vector2(1, 0));
+            specialBrandMenu.SetActive(false);
+            specialImageHost = CreateRuntimePanel("SpecialImage", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.64f, .28f), new Vector2(.965f, .81f));
+            var choose = CreateRuntimeButton("ChooseSpecialImage", specialImageHost.transform, "+  CHOOSE SPECIAL IMAGE", new Vector2(.06f, .05f), new Vector2(.94f, .22f),
+                new Color32(25, 45, 65, 255), Color.white); choose.onClick.AddListener(PickSpecialImage);
+            specialImageStatus = CreateRuntimeText("ImageStatus", panel.transform, "No image selected", 12, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.64f, .22f), new Vector2(.965f, .28f));
+            specialValidationText = CreateRuntimeText("Validation", panel.transform, string.Empty, 13, new Color32(255, 105, 105, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .04f), new Vector2(.70f, .17f), FontStyle.Bold);
+            var save = CreateRuntimeButton("SaveSpecialButton", panel.transform, "CREATE SPECIAL", new Vector2(.76f, .06f), new Vector2(.965f, .19f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); specialSaveLabel = save.transform.Find("Label").GetComponent<Text>();
+            save.onClick.AddListener(SaveSpecial);
             return panel;
         }
 
@@ -742,6 +905,197 @@ namespace WrestlingUniverse.UI
             brandNameInput.text = string.Empty; brandColorInput.text = "#FFFFFF"; selectedBrandImagePath = string.Empty;
             brandImageStatus.text = "No image selected"; brandValidationText.text = string.Empty;
             var old = brandImageHost.transform.Find("ImagePreview"); if (old != null) Destroy(old.gameObject);
+        }
+
+        private void ShowTvShowCreation()
+        {
+            SelectSection("MyUniverseButton", "CREATE TV SHOW", string.Empty); sectionContentText.gameObject.SetActive(false); tvShowCreationPanel.SetActive(true);
+            editingTvShow = null; tvShowFormTitle.text = "CREATE TV SHOW"; tvShowSaveLabel.text = "CREATE TV SHOW";
+            tvShowNameInput.text = string.Empty; tvShowFrequencyDropdown.value = 0; tvShowDayDropdown.value = 1;
+            selectedTvShowBrandIds.Clear(); selectedTvShowImagePath = string.Empty; tvShowImageStatus.text = "No image selected"; tvShowValidationText.text = string.Empty;
+            var old = tvShowImageHost.transform.Find("ImagePreview"); if (old != null) Destroy(old.gameObject); BuildTvShowBrandMenu();
+        }
+
+        private void EditTvShow(TvShowRecord show)
+        {
+            ShowTvShowCreation(); editingTvShow = show; tvShowFormTitle.text = "EDIT TV SHOW"; tvShowSaveLabel.text = "SAVE CHANGES";
+            tvShowNameInput.text = show.name; SetDropdownValue(tvShowFrequencyDropdown, show.frequency); SetDropdownValue(tvShowDayDropdown, show.dayOfWeek);
+            selectedTvShowBrandIds.Clear(); selectedTvShowBrandIds.AddRange(show.brandIds); BuildTvShowBrandMenu();
+            tvShowImageStatus.text = string.IsNullOrEmpty(show.imagePath) ? "No image selected" : System.IO.Path.GetFileName(show.imagePath);
+            var texture = UniverseImageStorage.LoadTexture(show.imagePath);
+            if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(tvShowImageHost.transform, "ImagePreview", texture, new Vector2(.05f, .25f), new Vector2(.95f, .95f)); }
+        }
+
+        private void ToggleTvShowBrandMenu() => tvShowBrandMenu.SetActive(!tvShowBrandMenu.activeSelf);
+
+        private void BuildTvShowBrandMenu()
+        {
+            availableTvShowBrands = repository.LoadBrands(ActiveUniverseSession.UniverseId);
+            for (var index = tvShowBrandMenu.transform.childCount - 1; index >= 0; index--) Destroy(tvShowBrandMenu.transform.GetChild(index).gameObject);
+            var count = Mathf.Max(1, availableTvShowBrands.Count); var height = 1f / count;
+            for (var index = 0; index < availableTvShowBrands.Count; index++)
+            {
+                var brand = availableTvShowBrands[index]; var top = 1f - index * height; var bottom = top - height;
+                var selected = selectedTvShowBrandIds.Contains(brand.id);
+                var row = CreateRuntimeButton("Brand_" + brand.id, tvShowBrandMenu.transform, (selected ? "✓  " : "     ") + brand.name,
+                    new Vector2(.02f, bottom), new Vector2(.98f, top), selected ? new Color32(25, 65, 82, 255) : new Color32(9, 15, 29, 255), Color.white);
+                row.onClick.AddListener(() => ToggleTvShowBrand(brand.id));
+            }
+            if (availableTvShowBrands.Count == 0)
+                CreateRuntimeText("NoBrands", tvShowBrandMenu.transform, "Create a Brand first", 14, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            var names = new List<string>(); foreach (var id in selectedTvShowBrandIds)
+            { var brand = availableTvShowBrands.Find(item => item.id == id); if (brand != null) names.Add(brand.name); }
+            tvShowBrandCaption.text = names.Count == 0 ? "Select one or more brands" : string.Join(", ", names.ToArray());
+        }
+
+        private void ToggleTvShowBrand(string brandId)
+        {
+            if (selectedTvShowBrandIds.Contains(brandId)) selectedTvShowBrandIds.Remove(brandId); else selectedTvShowBrandIds.Add(brandId);
+            BuildTvShowBrandMenu(); tvShowBrandMenu.SetActive(true);
+        }
+
+        private void PickTvShowImage()
+        {
+            string path; if (!WindowsImageFilePicker.TryPickImage(out path)) return;
+            var texture = UniverseImageStorage.LoadTexture(path);
+            if (texture == null) { tvShowValidationText.text = "Unity could not decode that image."; return; }
+            loadedTextures.Add(texture); selectedTvShowImagePath = path; tvShowImageStatus.text = System.IO.Path.GetFileName(path);
+            SetRuntimePhoto(tvShowImageHost.transform, "ImagePreview", texture, new Vector2(.05f, .25f), new Vector2(.95f, .95f));
+        }
+
+        private void SaveTvShow()
+        {
+            if (string.IsNullOrWhiteSpace(tvShowNameInput.text)) { tvShowValidationText.text = "Show name is required."; return; }
+            if (selectedTvShowBrandIds.Count == 0) { tvShowValidationText.text = "Select at least one Parent Brand."; return; }
+            try
+            {
+                var show = new TvShowRecord { id = editingTvShow == null ? Guid.NewGuid().ToString("N") : editingTvShow.id,
+                    universeId = ActiveUniverseSession.UniverseId, name = tvShowNameInput.text.Trim(),
+                    frequency = tvShowFrequencyDropdown.options[tvShowFrequencyDropdown.value].text,
+                    dayOfWeek = tvShowDayDropdown.options[tvShowDayDropdown.value].text,
+                    createdUtc = editingTvShow == null ? DateTime.UtcNow.ToString("O") : editingTvShow.createdUtc,
+                    imagePath = editingTvShow == null ? string.Empty : editingTvShow.imagePath,
+                    brandIds = new List<string>(selectedTvShowBrandIds) };
+                if (!string.IsNullOrEmpty(selectedTvShowImagePath)) show.imagePath = UniverseImageStorage.Import(show.universeId, selectedTvShowImagePath, "tvshow_" + show.id);
+                repository.SaveTvShow(show); tvShowBrandMenu.SetActive(false); ShowTvShows();
+            }
+            catch (Exception exception) { Debug.LogException(exception); tvShowValidationText.text = "The TV show could not be saved. Check the Console."; }
+        }
+
+        private void RefreshTvShowCards()
+        {
+            if (repository == null || tvShowGrid == null) return;
+            for (var index = tvShowGrid.childCount - 1; index >= 0; index--) Destroy(tvShowGrid.GetChild(index).gameObject);
+            var shows = repository.LoadTvShows(ActiveUniverseSession.UniverseId);
+            tvShowCountText.text = "TV SHOWS  /  " + shows.Count; emptyTvShowsText.gameObject.SetActive(shows.Count == 0);
+            foreach (var show in shows)
+            {
+                var card = CreateRuntimePanel("TvShow_" + show.id, tvShowGrid, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
+                var texture = UniverseImageStorage.LoadTexture(show.imagePath);
+                if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "ShowImage", texture, new Vector2(.04f, .42f), new Vector2(.96f, .95f)); }
+                CreateRuntimeText("Name", card.transform, show.name.ToUpperInvariant(), 18, Color.white, TextAnchor.MiddleLeft,
+                    new Vector2(.06f, .27f), new Vector2(.94f, .43f), FontStyle.Bold);
+                CreateRuntimeText("Schedule", card.transform, show.frequency.ToUpperInvariant() + "  /  " + show.dayOfWeek.ToUpperInvariant(), 13,
+                    new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft, new Vector2(.06f, .16f), new Vector2(.94f, .28f), FontStyle.Bold);
+                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .025f), new Vector2(.94f, .14f),
+                    new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditTvShow(show));
+            }
+        }
+
+        private void ShowSpecialCreation()
+        {
+            SelectSection("MyUniverseButton", "CREATE SPECIAL", string.Empty); sectionContentText.gameObject.SetActive(false); specialCreationPanel.SetActive(true);
+            editingSpecial = null; specialFormTitle.text = "CREATE SPECIAL"; specialSaveLabel.text = "CREATE SPECIAL";
+            specialNameInput.text = string.Empty; specialMonthDropdown.value = 0; specialWeekDropdown.value = 0; specialDayDropdown.value = 0;
+            selectedSpecialBrandIds.Clear(); selectedSpecialImagePath = string.Empty; specialImageStatus.text = "No image selected"; specialValidationText.text = string.Empty;
+            var old = specialImageHost.transform.Find("ImagePreview"); if (old != null) Destroy(old.gameObject); BuildSpecialBrandMenu();
+        }
+
+        private void EditSpecial(SpecialRecord special)
+        {
+            ShowSpecialCreation(); editingSpecial = special; specialFormTitle.text = "EDIT SPECIAL"; specialSaveLabel.text = "SAVE CHANGES";
+            specialNameInput.text = special.name; SetDropdownValue(specialMonthDropdown, special.month); SetDropdownValue(specialWeekDropdown, special.week);
+            SetDropdownValue(specialDayDropdown, special.dayOfWeek); selectedSpecialBrandIds.Clear(); selectedSpecialBrandIds.AddRange(special.brandIds); BuildSpecialBrandMenu();
+            specialImageStatus.text = string.IsNullOrEmpty(special.imagePath) ? "No image selected" : System.IO.Path.GetFileName(special.imagePath);
+            var texture = UniverseImageStorage.LoadTexture(special.imagePath);
+            if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(specialImageHost.transform, "ImagePreview", texture, new Vector2(.05f, .25f), new Vector2(.95f, .95f)); }
+        }
+
+        private void ToggleSpecialBrandMenu() => specialBrandMenu.SetActive(!specialBrandMenu.activeSelf);
+
+        private void BuildSpecialBrandMenu()
+        {
+            availableSpecialBrands = repository.LoadBrands(ActiveUniverseSession.UniverseId);
+            for (var index = specialBrandMenu.transform.childCount - 1; index >= 0; index--) Destroy(specialBrandMenu.transform.GetChild(index).gameObject);
+            var count = Mathf.Max(1, availableSpecialBrands.Count); var height = 1f / count;
+            for (var index = 0; index < availableSpecialBrands.Count; index++)
+            {
+                var brand = availableSpecialBrands[index]; var top = 1f - index * height; var bottom = top - height;
+                var selected = selectedSpecialBrandIds.Contains(brand.id);
+                var row = CreateRuntimeButton("Brand_" + brand.id, specialBrandMenu.transform, (selected ? "✓  " : "     ") + brand.name,
+                    new Vector2(.02f, bottom), new Vector2(.98f, top), selected ? new Color32(25, 65, 82, 255) : new Color32(9, 15, 29, 255), Color.white);
+                row.onClick.AddListener(() => ToggleSpecialBrand(brand.id));
+            }
+            if (availableSpecialBrands.Count == 0)
+                CreateRuntimeText("NoBrands", specialBrandMenu.transform, "Create a Brand first", 14, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            var names = new List<string>(); foreach (var id in selectedSpecialBrandIds)
+            { var brand = availableSpecialBrands.Find(item => item.id == id); if (brand != null) names.Add(brand.name); }
+            specialBrandCaption.text = names.Count == 0 ? "Select one or more brands" : string.Join(", ", names.ToArray());
+        }
+
+        private void ToggleSpecialBrand(string brandId)
+        {
+            if (selectedSpecialBrandIds.Contains(brandId)) selectedSpecialBrandIds.Remove(brandId); else selectedSpecialBrandIds.Add(brandId);
+            BuildSpecialBrandMenu(); specialBrandMenu.SetActive(true);
+        }
+
+        private void PickSpecialImage()
+        {
+            string path; if (!WindowsImageFilePicker.TryPickImage(out path)) return;
+            var texture = UniverseImageStorage.LoadTexture(path);
+            if (texture == null) { specialValidationText.text = "Unity could not decode that image."; return; }
+            loadedTextures.Add(texture); selectedSpecialImagePath = path; specialImageStatus.text = System.IO.Path.GetFileName(path);
+            SetRuntimePhoto(specialImageHost.transform, "ImagePreview", texture, new Vector2(.05f, .25f), new Vector2(.95f, .95f));
+        }
+
+        private void SaveSpecial()
+        {
+            if (string.IsNullOrWhiteSpace(specialNameInput.text)) { specialValidationText.text = "Special name is required."; return; }
+            if (selectedSpecialBrandIds.Count == 0) { specialValidationText.text = "Select at least one Participating Brand."; return; }
+            try
+            {
+                var special = new SpecialRecord { id = editingSpecial == null ? Guid.NewGuid().ToString("N") : editingSpecial.id,
+                    universeId = ActiveUniverseSession.UniverseId, name = specialNameInput.text.Trim(),
+                    month = specialMonthDropdown.options[specialMonthDropdown.value].text,
+                    week = specialWeekDropdown.options[specialWeekDropdown.value].text,
+                    dayOfWeek = specialDayDropdown.options[specialDayDropdown.value].text,
+                    createdUtc = editingSpecial == null ? DateTime.UtcNow.ToString("O") : editingSpecial.createdUtc,
+                    imagePath = editingSpecial == null ? string.Empty : editingSpecial.imagePath,
+                    brandIds = new List<string>(selectedSpecialBrandIds) };
+                if (!string.IsNullOrEmpty(selectedSpecialImagePath)) special.imagePath = UniverseImageStorage.Import(special.universeId, selectedSpecialImagePath, "special_" + special.id);
+                repository.SaveSpecial(special); specialBrandMenu.SetActive(false); ShowSpecials();
+            }
+            catch (Exception exception) { Debug.LogException(exception); specialValidationText.text = "The special could not be saved. Check the Console."; }
+        }
+
+        private void RefreshSpecialCards()
+        {
+            if (repository == null || specialGrid == null) return;
+            for (var index = specialGrid.childCount - 1; index >= 0; index--) Destroy(specialGrid.GetChild(index).gameObject);
+            var specials = repository.LoadSpecials(ActiveUniverseSession.UniverseId);
+            specialCountText.text = "SPECIALS  /  " + specials.Count; emptySpecialsText.gameObject.SetActive(specials.Count == 0);
+            foreach (var special in specials)
+            {
+                var card = CreateRuntimePanel("Special_" + special.id, specialGrid, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
+                var texture = UniverseImageStorage.LoadTexture(special.imagePath);
+                if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "SpecialImage", texture, new Vector2(.04f, .42f), new Vector2(.96f, .95f)); }
+                CreateRuntimeText("Name", card.transform, special.name.ToUpperInvariant(), 18, Color.white, TextAnchor.MiddleLeft,
+                    new Vector2(.06f, .27f), new Vector2(.94f, .43f), FontStyle.Bold);
+                CreateRuntimeText("Month", card.transform, special.month.ToUpperInvariant(), 13, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                    new Vector2(.06f, .16f), new Vector2(.94f, .28f), FontStyle.Bold);
+                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .025f), new Vector2(.94f, .14f),
+                    new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditSpecial(special));
+            }
         }
 
         private void EditBrand(BrandRecord brand)
@@ -1242,13 +1596,15 @@ namespace WrestlingUniverse.UI
             if (universeButton == null || universeButton.Find("MyUniverseDropdown") != null) return;
 
             var menu = CreateRuntimePanel("MyUniverseDropdown", universeButton, new Color32(5, 9, 20, 255),
-                new Vector2(0, -2.25f), new Vector2(1, 0));
+                new Vector2(0, -2.95f), new Vector2(1, 0));
             menu.transform.SetAsLastSibling();
-            var brands = CreateRuntimeButton("BrandsMenuItem", menu.transform, "BRANDS", new Vector2(0, .69f), new Vector2(1, .97f),
+            var brands = CreateRuntimeButton("BrandsMenuItem", menu.transform, "BRANDS", new Vector2(0, .77f), new Vector2(1, .98f),
                 new Color32(9, 15, 29, 255), Color.white); brands.onClick.AddListener(ShowBrands);
-            var shows = CreateRuntimeButton("ShowsMenuItem", menu.transform, "SHOWS", new Vector2(0, .36f), new Vector2(1, .64f),
-                new Color32(9, 15, 29, 255), Color.white); shows.onClick.AddListener(ShowShows);
-            var locations = CreateRuntimeButton("LocationsMenuItem", menu.transform, "LOCATIONS", new Vector2(0, .03f), new Vector2(1, .31f),
+            var shows = CreateRuntimeButton("TvShowsMenuItem", menu.transform, "TV SHOWS", new Vector2(0, .52f), new Vector2(1, .73f),
+                new Color32(9, 15, 29, 255), Color.white); shows.onClick.AddListener(ShowTvShows);
+            var specials = CreateRuntimeButton("SpecialsMenuItem", menu.transform, "SPECIALS", new Vector2(0, .27f), new Vector2(1, .48f),
+                new Color32(9, 15, 29, 255), Color.white); specials.onClick.AddListener(ShowSpecials);
+            var locations = CreateRuntimeButton("LocationsMenuItem", menu.transform, "LOCATIONS", new Vector2(0, .02f), new Vector2(1, .23f),
                 new Color32(9, 15, 29, 255), Color.white); locations.onClick.AddListener(ShowLocations);
 
             var hover = universeButton.gameObject.AddComponent<NavigationHoverDropdown>();

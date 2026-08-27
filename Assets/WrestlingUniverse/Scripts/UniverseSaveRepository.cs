@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 8;
+        private const int CurrentSchemaVersion = 10;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -71,6 +71,24 @@ namespace WrestlingUniverse.Persistence
                     "image_path TEXT, color_hex TEXT NOT NULL, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
                     "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE, UNIQUE(universe_id, name));");
                 Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_brands_universe ON brands(universe_id, name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS tv_shows (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, name TEXT NOT NULL, " +
+                    "frequency TEXT NOT NULL, day_of_week TEXT NOT NULL, image_path TEXT, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS tv_show_brands (show_id TEXT NOT NULL, brand_id TEXT NOT NULL, position INTEGER NOT NULL, " +
+                    "PRIMARY KEY(show_id, brand_id), FOREIGN KEY(show_id) REFERENCES tv_shows(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(brand_id) REFERENCES brands(id) ON DELETE CASCADE);");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_tv_shows_universe ON tv_shows(universe_id, name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS specials (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, name TEXT NOT NULL, " +
+                    "month TEXT NOT NULL, week TEXT NOT NULL, day_of_week TEXT NOT NULL, image_path TEXT, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS special_brands (special_id TEXT NOT NULL, brand_id TEXT NOT NULL, position INTEGER NOT NULL, " +
+                    "PRIMARY KEY(special_id, brand_id), FOREIGN KEY(special_id) REFERENCES specials(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(brand_id) REFERENCES brands(id) ON DELETE CASCADE);");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_specials_universe ON specials(universe_id, month, name);");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -399,6 +417,113 @@ namespace WrestlingUniverse.Persistence
                     command.CommandText = "UPDATE " + table + " SET brand = @newName WHERE universe_id = @universeId AND brand = @oldName;";
                     AddParameter(command, "@newName", newName); AddParameter(command, "@oldName", oldName);
                     AddParameter(command, "@universeId", universeId); command.ExecuteNonQuery();
+                }
+                transaction.Commit();
+            }
+        }
+
+        public List<UI.TvShowRecord> LoadTvShows(string universeId)
+        {
+            var results = new List<UI.TvShowRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT id, universe_id, name, frequency, day_of_week, image_path, created_utc FROM tv_shows " +
+                                      "WHERE universe_id = @universeId ORDER BY name COLLATE NOCASE;";
+                AddParameter(command, "@universeId", universeId);
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) results.Add(new UI.TvShowRecord { id = reader.GetString(0), universeId = reader.GetString(1),
+                        name = reader.GetString(2), frequency = reader.GetString(3), dayOfWeek = reader.GetString(4),
+                        imagePath = ReadNullableString(reader, 5), createdUtc = reader.GetString(6) });
+            }
+            foreach (var show in results)
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT b.id, b.name FROM tv_show_brands sb JOIN brands b ON b.id = sb.brand_id " +
+                                      "WHERE sb.show_id = @showId ORDER BY sb.position;";
+                AddParameter(command, "@showId", show.id);
+                using (var reader = command.ExecuteReader()) while (reader.Read()) { show.brandIds.Add(reader.GetString(0)); show.brandNames.Add(reader.GetString(1)); }
+            }
+            return results;
+        }
+
+        public void SaveTvShow(UI.TvShowRecord show)
+        {
+            using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT OR REPLACE INTO tv_shows(id, universe_id, name, frequency, day_of_week, image_path, created_utc, updated_utc) " +
+                                          "VALUES(@id, @universeId, @name, @frequency, @day, @image, @created, @updated);";
+                    AddParameter(command, "@id", show.id); AddParameter(command, "@universeId", show.universeId);
+                    AddParameter(command, "@name", show.name); AddParameter(command, "@frequency", show.frequency);
+                    AddParameter(command, "@day", show.dayOfWeek); AddParameter(command, "@image", show.imagePath);
+                    AddParameter(command, "@created", show.createdUtc); AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+                }
+                using (var command = CreateCommand(connection))
+                { command.Transaction = transaction; command.CommandText = "DELETE FROM tv_show_brands WHERE show_id = @id;"; AddParameter(command, "@id", show.id); command.ExecuteNonQuery(); }
+                for (var index = 0; index < show.brandIds.Count; index++)
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction; command.CommandText = "INSERT INTO tv_show_brands(show_id, brand_id, position) VALUES(@show, @brand, @position);";
+                    AddParameter(command, "@show", show.id); AddParameter(command, "@brand", show.brandIds[index]); AddParameter(command, "@position", index); command.ExecuteNonQuery();
+                }
+                transaction.Commit();
+            }
+        }
+
+        public List<UI.SpecialRecord> LoadSpecials(string universeId)
+        {
+            var results = new List<UI.SpecialRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT id, universe_id, name, month, week, day_of_week, image_path, created_utc FROM specials " +
+                                      "WHERE universe_id = @universeId ORDER BY rowid;";
+                AddParameter(command, "@universeId", universeId);
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) results.Add(new UI.SpecialRecord { id = reader.GetString(0), universeId = reader.GetString(1),
+                        name = reader.GetString(2), month = reader.GetString(3), week = reader.GetString(4), dayOfWeek = reader.GetString(5),
+                        imagePath = ReadNullableString(reader, 6), createdUtc = reader.GetString(7) });
+            }
+            foreach (var special in results)
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT b.id, b.name FROM special_brands sb JOIN brands b ON b.id = sb.brand_id " +
+                                      "WHERE sb.special_id = @specialId ORDER BY sb.position;";
+                AddParameter(command, "@specialId", special.id);
+                using (var reader = command.ExecuteReader()) while (reader.Read()) { special.brandIds.Add(reader.GetString(0)); special.brandNames.Add(reader.GetString(1)); }
+            }
+            return results;
+        }
+
+        public void SaveSpecial(UI.SpecialRecord special)
+        {
+            using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT OR REPLACE INTO specials(id, universe_id, name, month, week, day_of_week, image_path, created_utc, updated_utc) " +
+                                          "VALUES(@id, @universeId, @name, @month, @week, @day, @image, @created, @updated);";
+                    AddParameter(command, "@id", special.id); AddParameter(command, "@universeId", special.universeId);
+                    AddParameter(command, "@name", special.name); AddParameter(command, "@month", special.month);
+                    AddParameter(command, "@week", special.week); AddParameter(command, "@day", special.dayOfWeek);
+                    AddParameter(command, "@image", special.imagePath); AddParameter(command, "@created", special.createdUtc);
+                    AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+                }
+                using (var command = CreateCommand(connection))
+                { command.Transaction = transaction; command.CommandText = "DELETE FROM special_brands WHERE special_id = @id;"; AddParameter(command, "@id", special.id); command.ExecuteNonQuery(); }
+                for (var index = 0; index < special.brandIds.Count; index++)
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction; command.CommandText = "INSERT INTO special_brands(special_id, brand_id, position) VALUES(@special, @brand, @position);";
+                    AddParameter(command, "@special", special.id); AddParameter(command, "@brand", special.brandIds[index]); AddParameter(command, "@position", index); command.ExecuteNonQuery();
                 }
                 transaction.Commit();
             }
