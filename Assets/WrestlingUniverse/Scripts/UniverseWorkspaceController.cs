@@ -149,7 +149,13 @@ namespace WrestlingUniverse.UI
         private List<BrandRecord> availableSpecialBrands = new List<BrandRecord>();
         private GameObject calendarView;
         private Dropdown calendarMonthDropdown;
+        private InputField calendarYearInput;
+        private Text calendarHeadingText;
+        private int calendarYear = DateTime.Now.Year;
         private readonly List<Transform> calendarCells = new List<Transform>();
+        private GameObject showBookingPanel;
+        private Text bookingShowNameText;
+        private Text bookingScheduleText;
         private static readonly string[] ShowFrequencies = { "Weekly", "Bi-Weekly", "Monthly", "Special" };
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
@@ -186,6 +192,7 @@ namespace WrestlingUniverse.UI
                 ownerText.text = "OWNER  /  " + universe.ownerName;
                 startDateText.text = "UNIVERSE START  /  " + universe.startDate;
                 statusText.text = "UNIVERSE LOADED  /  " + universe.id.Substring(0, 8).ToUpperInvariant();
+                InitializeCalendarDate(universe.startDate);
                 ShowMyUniverse();
             }
             catch (Exception exception)
@@ -288,6 +295,7 @@ namespace WrestlingUniverse.UI
             if (tvShowCreationPanel != null) tvShowCreationPanel.SetActive(false);
             if (specialCreationPanel != null) specialCreationPanel.SetActive(false);
             if (calendarView != null) calendarView.SetActive(false);
+            if (showBookingPanel != null) showBookingPanel.SetActive(false);
             var navigation = sectionTitleText.transform.root.Find("Background/WorkspaceNavigation");
             if (navigation == null) return;
             foreach (Transform child in navigation)
@@ -332,6 +340,7 @@ namespace WrestlingUniverse.UI
             specialsView = CreateSpecialsView(workspace);
             specialCreationPanel = CreateSpecialCreationPanel(workspace);
             calendarView = CreateCalendarView(workspace);
+            showBookingPanel = CreateShowBookingPanel(workspace);
             locationsView = CreateLocationsView(workspace);
             locationCreationPanel = CreateLocationCreationPanel(workspace);
             rosterView.SetActive(false);
@@ -346,6 +355,7 @@ namespace WrestlingUniverse.UI
             tvShowCreationPanel.SetActive(false);
             specialCreationPanel.SetActive(false);
             calendarView.SetActive(false);
+            showBookingPanel.SetActive(false);
         }
 
         private GameObject CreateUniverseSetupView(Transform workspace, string objectName, string heading, string action, string emptyMessage)
@@ -548,10 +558,21 @@ namespace WrestlingUniverse.UI
         private GameObject CreateCalendarView(Transform workspace)
         {
             var view = CreateRuntimePanel("CalendarView", workspace, new Color32(3, 9, 14, 255), Vector2.zero, Vector2.one);
-            CreateRuntimeText("CalendarHeading", view.transform, "UNIVERSE CALENDAR", 24, Color.white, TextAnchor.MiddleLeft,
-                new Vector2(.02f, .87f), new Vector2(.48f, .99f), FontStyle.Bold);
+            calendarHeadingText = CreateRuntimeText("CalendarHeading", view.transform, "UNIVERSE CALENDAR", 24, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.02f, .87f), new Vector2(.42f, .99f), FontStyle.Bold);
+            var backTen = CreateRuntimeButton("BackTenYears", view.transform, "-10", new Vector2(.50f, .88f), new Vector2(.545f, .975f),
+                new Color32(25, 45, 65, 255), Color.white); backTen.onClick.AddListener(() => ChangeCalendarYear(-10));
+            var backOne = CreateRuntimeButton("BackOneYear", view.transform, "<", new Vector2(.55f, .88f), new Vector2(.59f, .975f),
+                new Color32(25, 45, 65, 255), Color.white); backOne.onClick.AddListener(() => ChangeCalendarYear(-1));
+            calendarYearInput = CreateRuntimeInput("CalendarYear", view.transform, "YEAR", calendarYear.ToString(), new Vector2(.595f, .865f), new Vector2(.70f, .985f));
+            calendarYearInput.contentType = InputField.ContentType.IntegerNumber; calendarYearInput.characterLimit = 4;
+            calendarYearInput.onEndEdit.AddListener(_ => ApplyCalendarYearInput());
+            var forwardOne = CreateRuntimeButton("ForwardOneYear", view.transform, ">", new Vector2(.705f, .88f), new Vector2(.745f, .975f),
+                new Color32(25, 45, 65, 255), Color.white); forwardOne.onClick.AddListener(() => ChangeCalendarYear(1));
+            var forwardTen = CreateRuntimeButton("ForwardTenYears", view.transform, "+10", new Vector2(.75f, .88f), new Vector2(.795f, .975f),
+                new Color32(25, 45, 65, 255), Color.white); forwardTen.onClick.AddListener(() => ChangeCalendarYear(10));
             calendarMonthDropdown = CreateRuntimeDropdown("CalendarMonth", view.transform, "MONTH", Months, Mathf.Clamp(DateTime.Now.Month - 1, 0, 11),
-                new Vector2(.76f, .865f), new Vector2(.98f, .985f));
+                new Vector2(.81f, .865f), new Vector2(.98f, .985f));
             calendarMonthDropdown.onValueChanged.AddListener(_ => RefreshCalendar());
 
             var dayNames = new[] { "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY" };
@@ -580,6 +601,23 @@ namespace WrestlingUniverse.UI
                 }
             }
             return view;
+        }
+
+        private GameObject CreateShowBookingPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("ShowBookingPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            CreateRuntimeText("Eyebrow", panel.transform, "SHOW BOOKING", 14, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .84f), new Vector2(.42f, .97f), FontStyle.Bold);
+            bookingShowNameText = CreateRuntimeText("ShowName", panel.transform, "SHOW NAME", 30, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .72f), new Vector2(.68f, .87f), FontStyle.Bold);
+            bookingScheduleText = CreateRuntimeText("Schedule", panel.transform, string.Empty, 15, new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .64f), new Vector2(.72f, .74f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToCalendarButton", panel.transform, "BACK TO CALENDAR", new Vector2(.79f, .84f), new Vector2(.965f, .95f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowCalendar);
+            var blank = CreateRuntimePanel("BookingWorkspace", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .06f), new Vector2(.965f, .60f));
+            CreateRuntimeText("EmptyState", blank.transform, "BOOKING WORKSPACE\n\nMatches and show segments will be added here.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return panel;
         }
 
         private GameObject CreateLocationCreationPanel(Transform workspace)
@@ -1149,9 +1187,42 @@ namespace WrestlingUniverse.UI
             }
         }
 
+        private void InitializeCalendarDate(string startDate)
+        {
+            DateTime parsed;
+            if (!DateTime.TryParseExact(startDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out parsed)) parsed = DateTime.Today;
+            calendarYear = parsed.Year;
+            if (calendarYearInput != null) calendarYearInput.text = calendarYear.ToString();
+            if (calendarMonthDropdown != null)
+            {
+                calendarMonthDropdown.value = parsed.Month - 1;
+                calendarMonthDropdown.RefreshShownValue();
+            }
+        }
+
+        private void ChangeCalendarYear(int amount)
+        {
+            calendarYear = Mathf.Clamp(calendarYear + amount, 1, 9999);
+            calendarYearInput.text = calendarYear.ToString();
+            RefreshCalendar();
+        }
+
+        private void ApplyCalendarYearInput()
+        {
+            int enteredYear;
+            if (!int.TryParse(calendarYearInput.text, out enteredYear) || enteredYear < 1 || enteredYear > 9999)
+                enteredYear = calendarYear;
+            calendarYear = enteredYear;
+            calendarYearInput.text = calendarYear.ToString();
+            RefreshCalendar();
+        }
+
         private void RefreshCalendar()
         {
             if (repository == null || calendarCells.Count != 28) return;
+            var selectedMonth = calendarMonthDropdown.options[calendarMonthDropdown.value].text;
+            if (calendarHeadingText != null) calendarHeadingText.text = selectedMonth.ToUpperInvariant() + "  " + calendarYear;
             foreach (var cell in calendarCells)
                 for (var index = cell.childCount - 1; index >= 0; index--) Destroy(cell.GetChild(index).gameObject);
 
@@ -1160,20 +1231,19 @@ namespace WrestlingUniverse.UI
                 var day = CalendarDayIndex(show.dayOfWeek);
                 if (day < 0) continue;
                 var weeks = CalendarWeeksForFrequency(show.frequency);
-                foreach (var week in weeks) AddCalendarEvent(week, day, show.name, show.imagePath, false);
+                foreach (var week in weeks) AddCalendarEvent(week, day, show.id, "TV Show", show.name, show.imagePath, false);
             }
 
-            var selectedMonth = calendarMonthDropdown.options[calendarMonthDropdown.value].text;
             foreach (var special in repository.LoadSpecials(ActiveUniverseSession.UniverseId))
             {
                 if (!string.Equals(special.month, selectedMonth, StringComparison.OrdinalIgnoreCase)) continue;
                 var week = Array.IndexOf(MonthWeeks, special.week);
                 var day = CalendarDayIndex(special.dayOfWeek);
-                if (week >= 0 && day >= 0) AddCalendarEvent(week, day, special.name, special.imagePath, true);
+                if (week >= 0 && day >= 0) AddCalendarEvent(week, day, special.id, "Special", special.name, special.imagePath, true);
             }
         }
 
-        private void AddCalendarEvent(int week, int day, string eventName, string imagePath, bool isSpecial)
+        private void AddCalendarEvent(int week, int day, string sourceId, string sourceType, string eventName, string imagePath, bool isSpecial)
         {
             if (week < 0 || week > 3 || day < 0 || day > 6) return;
             var cell = calendarCells[week * 7 + day];
@@ -1184,6 +1254,9 @@ namespace WrestlingUniverse.UI
             if (maxY <= .04f) return;
             var tile = CreateRuntimePanel("Event_" + eventIndex, cell, isSpecial ? new Color32(48, 37, 18, 255) : new Color32(16, 30, 43, 255),
                 new Vector2(.035f, minY), new Vector2(.965f, maxY));
+            var tileButton = tile.AddComponent<Button>(); tileButton.targetGraphic = tile.GetComponent<Image>();
+            var selectedWeek = week; var selectedDay = day; var selectedSourceId = sourceId; var selectedSourceType = sourceType; var selectedName = eventName;
+            tileButton.onClick.AddListener(() => OpenShowBooking(selectedSourceId, selectedSourceType, selectedName, selectedWeek, selectedDay));
             var texture = UniverseImageStorage.LoadTexture(imagePath);
             var textMin = .06f;
             if (texture != null)
@@ -1194,6 +1267,18 @@ namespace WrestlingUniverse.UI
             }
             CreateRuntimeText("EventName", tile.transform, eventName.ToUpperInvariant(), 10, isSpecial ? new Color32(240, 190, 42, 255) : Color.white,
                 TextAnchor.MiddleLeft, new Vector2(textMin, .06f), new Vector2(.97f, .94f), FontStyle.Bold);
+        }
+
+        private void OpenShowBooking(string sourceId, string sourceType, string showName, int week, int day)
+        {
+            var month = calendarMonthDropdown.options[calendarMonthDropdown.value].text;
+            var dayName = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }[day];
+            ActiveBookingSession.Begin(ActiveUniverseSession.UniverseId, sourceId, sourceType, showName, calendarYear, month, week + 1, dayName);
+            SelectSection("BookingButton", "BOOK " + showName.ToUpperInvariant(), string.Empty);
+            sectionContentText.gameObject.SetActive(false); showBookingPanel.SetActive(true);
+            bookingShowNameText.text = showName.ToUpperInvariant();
+            bookingScheduleText.text = sourceType.ToUpperInvariant() + "  /  " + month.ToUpperInvariant() + " " + calendarYear +
+                                       "  /  WEEK " + (week + 1) + "  /  " + dayName.ToUpperInvariant();
         }
 
         private static int CalendarDayIndex(string day)

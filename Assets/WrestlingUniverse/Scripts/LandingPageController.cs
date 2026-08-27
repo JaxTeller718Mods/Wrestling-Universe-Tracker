@@ -140,10 +140,10 @@ namespace WrestlingUniverse.UI
                 return;
             }
 
-            if (!DateTime.TryParseExact(startDateInput.text.Trim(), "yyyy-MM-dd", null,
+            if (!DateTime.TryParseExact(startDateInput.text.Trim(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out parsedDate))
             {
-                validationText.text = "Use YYYY-MM-DD for the start date.";
+                validationText.text = "Use YYYY-MM-DD for the start date (years 0001-9999).";
                 return;
             }
 
