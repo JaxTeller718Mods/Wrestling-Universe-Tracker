@@ -27,3 +27,9 @@ Hovering **Roster** in the workspace navigation opens a submenu containing **Ros
 Teams are persisted per universe with a name, future Brand assignment, disposition, and one to five roster-member references. The custom member dropdown supports multiple selections with a five-member cap, and each team card can reopen the form for editing.
 
 Teams also support an optional managed photo. It is copied into the universe image directory, persisted in SQLite through schema version 4, shown on team cards, and retained or replaced during editing.
+
+**Titles** appears beneath Teams in the Roster hover menu. Championships persist per universe with a name, future Brand assignment, optional wide belt image, and a roster-backed holder or Vacant status. The title grid uses wide three-column cards with the holder shown beneath each title.
+
+Titles also store a Men's, Women's, or Tag Team division. Each title card includes **Edit**, which preloads all fields and preserves the existing belt image unless it is replaced.
+
+Each title card also includes **History**. It opens a title-specific blank history panel reserved for future championship reigns, holders, victories, vacancies, and dates.

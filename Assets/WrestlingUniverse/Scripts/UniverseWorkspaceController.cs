@@ -59,6 +59,26 @@ namespace WrestlingUniverse.UI
         private GameObject teamPhotoHost;
         private Text teamPhotoStatus;
         private string selectedTeamPhotoPath;
+        private GameObject titlesView;
+        private GameObject titleCreationPanel;
+        private Transform titleGrid;
+        private Text emptyTitlesText;
+        private Text titleCountText;
+        private InputField titleNameInput;
+        private Dropdown titleBrandDropdown;
+        private Dropdown titleHolderDropdown;
+        private GameObject titleImageHost;
+        private Text titleImageStatus;
+        private Text titleValidationText;
+        private string selectedTitleImagePath;
+        private List<WrestlerRecord> titleHolderOptions = new List<WrestlerRecord>();
+        private Dropdown titleDivisionDropdown;
+        private Text titleFormTitle;
+        private Text titleSaveLabel;
+        private TitleRecord editingTitle;
+        private static readonly string[] TitleDivisions = { "Men's", "Women's", "Tag Team" };
+        private GameObject titleHistoryPanel;
+        private Text titleHistoryNameText;
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
         private static readonly string[] Genders = { "Male", "Female", "Neutral" };
@@ -119,6 +139,12 @@ namespace WrestlingUniverse.UI
             RefreshTeamCards();
         }
 
+        public void ShowTitles()
+        {
+            SelectSection("RosterButton", "TITLES", string.Empty);
+            sectionContentText.gameObject.SetActive(false); titlesView.SetActive(true); RefreshTitleCards();
+        }
+
         public void ShowBooking() => SelectSection("BookingButton", "BOOKING",
             "BOOKING CENTER\n\nShows, events, matches, and segments will be created here.");
 
@@ -138,6 +164,9 @@ namespace WrestlingUniverse.UI
             if (wrestlerCreationPanel != null) wrestlerCreationPanel.SetActive(false);
             if (teamsView != null) teamsView.SetActive(false);
             if (teamCreationPanel != null) teamCreationPanel.SetActive(false);
+            if (titlesView != null) titlesView.SetActive(false);
+            if (titleCreationPanel != null) titleCreationPanel.SetActive(false);
+            if (titleHistoryPanel != null) titleHistoryPanel.SetActive(false);
             var navigation = sectionTitleText.transform.root.Find("Background/WorkspaceNavigation");
             if (navigation == null) return;
             foreach (Transform child in navigation)
@@ -171,10 +200,15 @@ namespace WrestlingUniverse.UI
             teamsView = existingTeams != null ? existingTeams.gameObject : CreateTeamsView(workspace);
             var existingTeamCreation = workspace.Find("TeamCreationPanel");
             teamCreationPanel = existingTeamCreation != null ? existingTeamCreation.gameObject : CreateTeamCreationPanel(workspace);
+            titlesView = CreateTitlesView(workspace);
+            titleCreationPanel = CreateTitleCreationPanel(workspace);
+            titleHistoryPanel = CreateTitleHistoryPanel(workspace);
             rosterView.SetActive(false);
             wrestlerCreationPanel.SetActive(false);
             teamsView.SetActive(false);
             teamCreationPanel.SetActive(false);
+            titlesView.SetActive(false); titleCreationPanel.SetActive(false);
+            titleHistoryPanel.SetActive(false);
         }
 
         private GameObject CreateTeamsView(Transform workspace)
@@ -240,6 +274,69 @@ namespace WrestlingUniverse.UI
             var save = CreateRuntimeButton("SaveTeamButton", panel.transform, "CREATE TEAM", new Vector2(.76f, .14f), new Vector2(.965f, .32f),
                 new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255));
             teamSaveLabel = save.transform.Find("Label").GetComponent<Text>(); save.onClick.AddListener(SaveTeam);
+            return panel;
+        }
+
+        private GameObject CreateTitlesView(Transform workspace)
+        {
+            var view = CreateRuntimePanel("TitlesView", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("TitlesToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
+            titleCountText = CreateRuntimeText("TitleCount", toolbar.transform, "TITLES  /  0", 17, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+            var create = CreateRuntimeButton("CreateTitleButton", toolbar.transform, "+  CREATE TITLE", new Vector2(.76f, .16f), new Vector2(.975f, .84f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); create.onClick.AddListener(ShowTitleCreation);
+            var table = CreateRuntimePanel("TitleTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
+            table.AddComponent<RectMask2D>(); var scroll = table.AddComponent<ScrollRect>();
+            scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 4f; scroll.movementType = ScrollRect.MovementType.Clamped;
+            titleGrid = new GameObject("TitleCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter)).transform;
+            titleGrid.SetParent(table.transform, false); var rect = titleGrid.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(.02f, 1); rect.anchorMax = new Vector2(.98f, 1); rect.pivot = new Vector2(.5f, 1); rect.anchoredPosition = new Vector2(0, -18); rect.sizeDelta = new Vector2(0, 230);
+            var grid = titleGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(430, 230); grid.spacing = new Vector2(22, 20);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 3; grid.childAlignment = TextAnchor.UpperCenter;
+            titleGrid.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.viewport = table.GetComponent<RectTransform>(); scroll.content = rect;
+            emptyTitlesText = CreateRuntimeText("EmptyTitles", table.transform, "NO TITLES CREATED\n\nUse CREATE TITLE to add the first championship.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private GameObject CreateTitleCreationPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("TitleCreationPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            titleFormTitle = CreateRuntimeText("Title", panel.transform, "CREATE TITLE", 27, Color.white, TextAnchor.MiddleLeft, new Vector2(.035f, .84f), new Vector2(.5f, .98f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToTitlesButton", panel.transform, "BACK TO TITLES", new Vector2(.80f, .86f), new Vector2(.965f, .96f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowTitles);
+            titleNameInput = CreateRuntimeInput("TitleName", panel.transform, "TITLE NAME", "Championship name", new Vector2(.035f, .62f), new Vector2(.55f, .80f));
+            titleBrandDropdown = CreateRuntimeDropdown("TitleBrand", panel.transform, "BRAND", new[] { "Unassigned" }, 0, new Vector2(.58f, .62f), new Vector2(.965f, .80f));
+            titleHolderDropdown = CreateRuntimeDropdown("TitleHolder", panel.transform, "TITLE HOLDER", new[] { "Vacant" }, 0, new Vector2(.035f, .38f), new Vector2(.55f, .57f));
+            titleDivisionDropdown = CreateRuntimeDropdown("TitleDivision", panel.transform, "DIVISION", TitleDivisions, 0, new Vector2(.035f, .19f), new Vector2(.55f, .35f));
+            titleImageHost = CreateRuntimePanel("TitleImage", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.58f, .25f), new Vector2(.965f, .57f));
+            var choose = CreateRuntimeButton("ChooseTitleImage", titleImageHost.transform, "+  CHOOSE TITLE IMAGE", new Vector2(.06f, .05f), new Vector2(.94f, .25f),
+                new Color32(25, 45, 65, 255), Color.white); choose.onClick.AddListener(PickTitleImage);
+            titleImageStatus = CreateRuntimeText("ImageStatus", panel.transform, "No image selected", 12, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.58f, .19f), new Vector2(.965f, .25f));
+            titleValidationText = CreateRuntimeText("Validation", panel.transform, string.Empty, 13, new Color32(255, 105, 105, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .04f), new Vector2(.62f, .17f), FontStyle.Bold);
+            var save = CreateRuntimeButton("SaveTitleButton", panel.transform, "CREATE TITLE", new Vector2(.76f, .06f), new Vector2(.965f, .18f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); save.onClick.AddListener(SaveTitle);
+            titleSaveLabel = save.transform.Find("Label").GetComponent<Text>();
+            return panel;
+        }
+
+        private GameObject CreateTitleHistoryPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("TitleHistoryPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            CreateRuntimeText("Eyebrow", panel.transform, "CHAMPIONSHIP HISTORY", 14, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.04f, .78f), new Vector2(.62f, .94f), FontStyle.Bold);
+            titleHistoryNameText = CreateRuntimeText("TitleName", panel.transform, "TITLE HISTORY", 29, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.04f, .64f), new Vector2(.72f, .82f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToTitlesButton", panel.transform, "BACK TO TITLES", new Vector2(.80f, .80f), new Vector2(.965f, .94f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowTitles);
+            var historyTable = CreateRuntimePanel("HistoryTable", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.04f, .08f), new Vector2(.96f, .59f));
+            CreateRuntimeText("EmptyHistory", historyTable.transform,
+                "NO TITLE HISTORY RECORDED\n\nChampionship reigns, holders, victories, vacancies, and dates will appear here.",
+                20, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
             return panel;
         }
 
@@ -439,6 +536,90 @@ namespace WrestlingUniverse.UI
                     TextAnchor.MiddleLeft, new Vector2(textMin, .20f), new Vector2(.94f, .32f), FontStyle.Bold);
                 var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .035f), new Vector2(.94f, .18f),
                     new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditTeam(team));
+            }
+        }
+
+        private void ShowTitleCreation()
+        {
+            SelectSection("RosterButton", "CREATE TITLE", string.Empty); sectionContentText.gameObject.SetActive(false); titleCreationPanel.SetActive(true);
+            editingTitle = null; titleFormTitle.text = "CREATE TITLE"; titleSaveLabel.text = "CREATE TITLE";
+            titleNameInput.text = string.Empty; titleBrandDropdown.value = 0; titleDivisionDropdown.value = 0; selectedTitleImagePath = string.Empty;
+            titleBrandDropdown.RefreshShownValue(); titleDivisionDropdown.RefreshShownValue();
+            titleImageStatus.text = "No image selected"; titleValidationText.text = string.Empty;
+            var old = titleImageHost.transform.Find("ImagePreview"); if (old != null) Destroy(old.gameObject);
+            titleHolderOptions = repository.LoadWrestlers(ActiveUniverseSession.UniverseId);
+            var options = new List<string> { "Vacant" }; foreach (var wrestler in titleHolderOptions) options.Add(wrestler.name);
+            titleHolderDropdown.ClearOptions(); titleHolderDropdown.AddOptions(options); titleHolderDropdown.value = 0; titleHolderDropdown.RefreshShownValue();
+        }
+
+        private void EditTitle(TitleRecord title)
+        {
+            ShowTitleCreation(); editingTitle = title; titleFormTitle.text = "EDIT TITLE"; titleSaveLabel.text = "SAVE CHANGES";
+            titleNameInput.text = title.name; SetDropdownValue(titleBrandDropdown, title.brand); SetDropdownValue(titleDivisionDropdown, title.division);
+            var holderIndex = string.IsNullOrEmpty(title.holderWrestlerId) ? -1 : titleHolderOptions.FindIndex(item => item.id == title.holderWrestlerId);
+            titleHolderDropdown.value = holderIndex < 0 ? 0 : holderIndex + 1; titleHolderDropdown.RefreshShownValue();
+            titleImageStatus.text = string.IsNullOrEmpty(title.imagePath) ? "No image selected" : System.IO.Path.GetFileName(title.imagePath);
+            var texture = UniverseImageStorage.LoadTexture(title.imagePath);
+            if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(titleImageHost.transform, "ImagePreview", texture, new Vector2(.04f, .28f), new Vector2(.96f, .95f)); }
+        }
+
+        private void ShowTitleHistory(TitleRecord title)
+        {
+            SelectSection("RosterButton", "TITLE HISTORY", string.Empty);
+            sectionContentText.gameObject.SetActive(false);
+            titleHistoryNameText.text = title.name.ToUpperInvariant();
+            titleHistoryPanel.SetActive(true);
+        }
+
+        private void PickTitleImage()
+        {
+            string path; if (!WindowsImageFilePicker.TryPickImage(out path)) return;
+            var texture = UniverseImageStorage.LoadTexture(path);
+            if (texture == null) { titleValidationText.text = "Unity could not decode that image."; return; }
+            loadedTextures.Add(texture); selectedTitleImagePath = path; titleImageStatus.text = System.IO.Path.GetFileName(path);
+            SetRuntimePhoto(titleImageHost.transform, "ImagePreview", texture, new Vector2(.04f, .28f), new Vector2(.96f, .95f));
+        }
+
+        private void SaveTitle()
+        {
+            if (string.IsNullOrWhiteSpace(titleNameInput.text)) { titleValidationText.text = "Title name is required."; return; }
+            try
+            {
+                var record = new TitleRecord { id = editingTitle == null ? Guid.NewGuid().ToString("N") : editingTitle.id, universeId = ActiveUniverseSession.UniverseId,
+                    name = titleNameInput.text.Trim(), brand = titleBrandDropdown.options[titleBrandDropdown.value].text,
+                    division = titleDivisionDropdown.options[titleDivisionDropdown.value].text,
+                    createdUtc = editingTitle == null ? DateTime.UtcNow.ToString("O") : editingTitle.createdUtc,
+                    imagePath = editingTitle == null ? string.Empty : editingTitle.imagePath };
+                if (titleHolderDropdown.value > 0) record.holderWrestlerId = titleHolderOptions[titleHolderDropdown.value - 1].id;
+                if (!string.IsNullOrEmpty(selectedTitleImagePath))
+                    record.imagePath = UniverseImageStorage.Import(record.universeId, selectedTitleImagePath, "title_" + record.id);
+                repository.SaveTitle(record); ShowTitles();
+            }
+            catch (Exception exception) { Debug.LogException(exception); titleValidationText.text = "The title could not be saved. Check the Console."; }
+        }
+
+        private void RefreshTitleCards()
+        {
+            if (repository == null || titleGrid == null) return;
+            for (var index = titleGrid.childCount - 1; index >= 0; index--) Destroy(titleGrid.GetChild(index).gameObject);
+            var titles = repository.LoadTitles(ActiveUniverseSession.UniverseId);
+            titleCountText.text = "TITLES  /  " + titles.Count; emptyTitlesText.gameObject.SetActive(titles.Count == 0);
+            foreach (var title in titles)
+            {
+                var card = CreateRuntimePanel("Title_" + title.id, titleGrid, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
+                var texture = UniverseImageStorage.LoadTexture(title.imagePath);
+                if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "BeltImage", texture, new Vector2(.04f, .50f), new Vector2(.96f, .94f)); }
+                CreateRuntimeText("Name", card.transform, title.name.ToUpperInvariant(), 18, new Color32(240, 190, 42, 255), TextAnchor.MiddleCenter,
+                    new Vector2(.05f, .31f), new Vector2(.95f, .50f), FontStyle.Bold);
+                CreateRuntimeText("Division", card.transform, title.division.ToUpperInvariant(), 11, new Color32(45, 190, 230, 255), TextAnchor.MiddleCenter,
+                    new Vector2(.05f, .23f), new Vector2(.95f, .32f), FontStyle.Bold);
+                CreateRuntimeText("Holder", card.transform, "TITLE HOLDER  /  " + title.holderName.ToUpperInvariant(), 13,
+                    title.holderWrestlerId.Length == 0 ? new Color32(142, 160, 181, 255) : Color.white,
+                    TextAnchor.MiddleCenter, new Vector2(.05f, .13f), new Vector2(.95f, .23f), FontStyle.Bold);
+                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.08f, .025f), new Vector2(.48f, .12f),
+                    new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditTitle(title));
+                var history = CreateRuntimeButton("HistoryButton", card.transform, "HISTORY", new Vector2(.52f, .025f), new Vector2(.92f, .12f),
+                    new Color32(25, 45, 65, 255), Color.white); history.onClick.AddListener(() => ShowTitleHistory(title));
             }
         }
 
@@ -742,14 +923,17 @@ namespace WrestlingUniverse.UI
             if (rosterButton == null || rosterButton.Find("RosterDropdown") != null) return;
 
             var menu = CreateRuntimePanel("RosterDropdown", rosterButton, new Color32(5, 9, 20, 255),
-                new Vector2(0, -1.55f), new Vector2(1, 0));
+                new Vector2(0, -2.25f), new Vector2(1, 0));
             menu.transform.SetAsLastSibling();
             var rosterItem = CreateRuntimeButton("RosterMenuItem", menu.transform, "ROSTER",
-                new Vector2(0, .52f), new Vector2(1, .96f), new Color32(9, 15, 29, 255), Color.white);
+                new Vector2(0, .69f), new Vector2(1, .97f), new Color32(9, 15, 29, 255), Color.white);
             rosterItem.onClick.AddListener(ShowRoster);
             var teamsItem = CreateRuntimeButton("TeamsMenuItem", menu.transform, "TEAMS",
-                new Vector2(0, .04f), new Vector2(1, .48f), new Color32(9, 15, 29, 255), Color.white);
+                new Vector2(0, .36f), new Vector2(1, .64f), new Color32(9, 15, 29, 255), Color.white);
             teamsItem.onClick.AddListener(ShowTeams);
+            var titlesItem = CreateRuntimeButton("TitlesMenuItem", menu.transform, "TITLES",
+                new Vector2(0, .03f), new Vector2(1, .31f), new Color32(9, 15, 29, 255), Color.white);
+            titlesItem.onClick.AddListener(ShowTitles);
 
             var hover = rosterButton.gameObject.AddComponent<NavigationHoverDropdown>();
             hover.Configure(menu);

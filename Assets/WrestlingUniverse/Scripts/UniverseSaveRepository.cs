@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 4;
+        private const int CurrentSchemaVersion = 6;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -54,6 +54,13 @@ namespace WrestlingUniverse.Persistence
                     "PRIMARY KEY(team_id, wrestler_id), FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE CASCADE, " +
                     "FOREIGN KEY(wrestler_id) REFERENCES wrestlers(id) ON DELETE CASCADE);");
                 Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_teams_universe ON teams(universe_id, name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS titles (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, name TEXT NOT NULL, " +
+                    "brand TEXT NOT NULL, holder_wrestler_id TEXT, image_path TEXT, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(holder_wrestler_id) REFERENCES wrestlers(id) ON DELETE SET NULL);");
+                EnsureColumn(connection, transaction, "titles", "division", "TEXT NOT NULL DEFAULT 'Men''s'");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_titles_universe ON titles(universe_id, name);");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -268,6 +275,42 @@ namespace WrestlingUniverse.Persistence
                     }
                 }
                 transaction.Commit();
+            }
+        }
+
+        public List<UI.TitleRecord> LoadTitles(string universeId)
+        {
+            var results = new List<UI.TitleRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT t.id, t.universe_id, t.name, t.brand, t.holder_wrestler_id, " +
+                                      "COALESCE(w.name, 'Vacant'), t.image_path, t.created_utc, t.division FROM titles t " +
+                                      "LEFT JOIN wrestlers w ON w.id = t.holder_wrestler_id WHERE t.universe_id = @universeId " +
+                                      "ORDER BY t.name COLLATE NOCASE;";
+                AddParameter(command, "@universeId", universeId);
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) results.Add(new UI.TitleRecord { id = reader.GetString(0), universeId = reader.GetString(1),
+                        name = reader.GetString(2), brand = reader.GetString(3), holderWrestlerId = ReadNullableString(reader, 4),
+                        holderName = reader.GetString(5), imagePath = ReadNullableString(reader, 6), createdUtc = reader.GetString(7),
+                        division = reader.GetString(8) });
+            }
+            return results;
+        }
+
+        public void SaveTitle(UI.TitleRecord title)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "INSERT OR REPLACE INTO titles(id, universe_id, name, brand, division, holder_wrestler_id, image_path, created_utc, updated_utc) " +
+                                      "VALUES(@id, @universeId, @name, @brand, @division, @holder, @image, @created, @updated);";
+                AddParameter(command, "@id", title.id); AddParameter(command, "@universeId", title.universeId);
+                AddParameter(command, "@name", title.name); AddParameter(command, "@brand", title.brand);
+                AddParameter(command, "@division", title.division);
+                AddParameter(command, "@holder", string.IsNullOrEmpty(title.holderWrestlerId) ? null : title.holderWrestlerId);
+                AddParameter(command, "@image", title.imagePath); AddParameter(command, "@created", title.createdUtc);
+                AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
             }
         }
 
