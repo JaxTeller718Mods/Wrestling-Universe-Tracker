@@ -162,12 +162,27 @@ namespace WrestlingUniverse.UI
         private GameObject segmentBookingHeader;
         private GameObject segmentBookingBody;
         private Text segmentBookingArrow;
+        private RectTransform bookingAccordionContent;
+        private ScrollRect bookingAccordionScroll;
         private bool matchBookingExpanded;
         private bool segmentBookingExpanded;
+        private Dropdown matchStipulationDropdown;
+        private Dropdown matchFormatDropdown;
+        private Dropdown matchTitleDropdown;
+        private List<TitleRecord> matchTitleOptions = new List<TitleRecord>();
+        private Dropdown matchGenderDropdown;
+        private GameObject matchParticipantMenu;
+        private Text matchParticipantCaption;
+        private readonly List<string> selectedMatchParticipantIds = new List<string>();
+        private List<WrestlerRecord> availableMatchParticipants = new List<WrestlerRecord>();
+        private List<string> activeBookingBrandNames = new List<string>();
         private static readonly string[] ShowFrequencies = { "Weekly", "Bi-Weekly", "Monthly", "Special" };
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
+        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules" };
+        private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
+        private static readonly string[] MatchGenderFilters = { "Both Genders", "Male", "Female", "Neutral" };
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
         private static readonly string[] Genders = { "Male", "Female", "Neutral" };
@@ -623,15 +638,53 @@ namespace WrestlingUniverse.UI
             var back = CreateRuntimeButton("BackToCalendarButton", panel.transform, "BACK TO CALENDAR", new Vector2(.79f, .84f), new Vector2(.965f, .95f),
                 new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowCalendar);
             var workspacePanel = CreateRuntimePanel("BookingWorkspace", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .04f), new Vector2(.965f, .62f));
-            matchBookingHeader = CreateBookingAccordionHeader("AddMatchHeader", workspacePanel.transform, "+", "ADD MATCH",
+            workspacePanel.AddComponent<RectMask2D>();
+            bookingAccordionScroll = workspacePanel.AddComponent<ScrollRect>(); bookingAccordionScroll.horizontal = false; bookingAccordionScroll.vertical = true;
+            bookingAccordionScroll.movementType = ScrollRect.MovementType.Clamped; bookingAccordionScroll.scrollSensitivity = 4f;
+            var contentObject = new GameObject("AccordionContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            contentObject.transform.SetParent(workspacePanel.transform, false); bookingAccordionContent = contentObject.GetComponent<RectTransform>();
+            bookingAccordionContent.anchorMin = new Vector2(.02f, 1); bookingAccordionContent.anchorMax = new Vector2(.98f, 1);
+            bookingAccordionContent.pivot = new Vector2(.5f, 1); bookingAccordionContent.anchoredPosition = new Vector2(0, -12); bookingAccordionContent.sizeDelta = Vector2.zero;
+            var accordionLayout = contentObject.GetComponent<VerticalLayoutGroup>(); accordionLayout.spacing = 14; accordionLayout.padding = new RectOffset(0, 0, 0, 18);
+            accordionLayout.childControlWidth = true; accordionLayout.childControlHeight = true; accordionLayout.childForceExpandWidth = true; accordionLayout.childForceExpandHeight = false;
+            contentObject.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            bookingAccordionScroll.viewport = workspacePanel.GetComponent<RectTransform>(); bookingAccordionScroll.content = bookingAccordionContent;
+            matchBookingHeader = CreateBookingAccordionHeader("AddMatchHeader", bookingAccordionContent, "+", "ADD MATCH",
                 new Color32(45, 190, 230, 255), out matchBookingArrow);
+            matchBookingHeader.AddComponent<LayoutElement>().preferredHeight = 72;
             matchBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleMatchBooking);
-            matchBookingBody = CreateRuntimePanel("MatchBookingBody", workspacePanel.transform, new Color32(8, 15, 27, 255), Vector2.zero, Vector2.one);
-            segmentBookingHeader = CreateBookingAccordionHeader("AddSegmentHeader", workspacePanel.transform, "●", "ADD SEGMENT",
+            matchBookingBody = CreateRuntimePanel("MatchBookingBody", bookingAccordionContent, new Color32(8, 15, 27, 255), Vector2.zero, Vector2.one);
+            matchBookingBody.AddComponent<LayoutElement>().preferredHeight = 390;
+            matchStipulationDropdown = CreateRuntimeDropdown("MatchStipulation", matchBookingBody.transform, "STIPULATION", MatchStipulations, 0,
+                new Vector2(.035f, .72f), new Vector2(.485f, .96f));
+            matchFormatDropdown = CreateRuntimeDropdown("MatchFormat", matchBookingBody.transform, "FORMAT", MatchFormats, 0,
+                new Vector2(.515f, .72f), new Vector2(.965f, .96f));
+            matchTitleDropdown = CreateRuntimeDropdown("MatchTitle", matchBookingBody.transform, "TITLE ON THE LINE", new[] { "None" }, 0,
+                new Vector2(.035f, .43f), new Vector2(.61f, .65f));
+            matchGenderDropdown = CreateRuntimeDropdown("MatchGender", matchBookingBody.transform, "GENDER FILTER", MatchGenderFilters, 0,
+                new Vector2(.64f, .43f), new Vector2(.965f, .65f));
+            var participantSelector = CreateRuntimeButton("MatchParticipantSelector", matchBookingBody.transform, string.Empty,
+                new Vector2(.035f, .08f), new Vector2(.965f, .34f), new Color32(5, 11, 23, 255), Color.white);
+            var participantLabel = participantSelector.transform.Find("Label"); if (participantLabel != null) Destroy(participantLabel.gameObject);
+            CreateRuntimeText("FieldLabel", participantSelector.transform, "PARTICIPANTS", 12, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .58f), new Vector2(.96f, .94f), FontStyle.Bold);
+            matchParticipantCaption = CreateRuntimeText("Value", participantSelector.transform, "Select 2 wrestlers", 16, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .06f), new Vector2(.90f, .62f));
+            CreateRuntimeText("Arrow", participantSelector.transform, "▼", 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.92f, .08f), new Vector2(.98f, .62f)); participantSelector.onClick.AddListener(ToggleMatchParticipantMenu);
+            matchParticipantMenu = CreateRuntimePanel("MatchParticipantDropdown", participantSelector.transform, new Color32(5, 9, 20, 255),
+                new Vector2(0, -2.2f), new Vector2(1, 0)); matchParticipantMenu.SetActive(false);
+            matchStipulationDropdown.onValueChanged.AddListener(_ => RefreshMatchFormats());
+            matchFormatDropdown.onValueChanged.AddListener(_ => HandleMatchFormatChanged());
+            matchGenderDropdown.onValueChanged.AddListener(_ => RefreshMatchParticipants());
+            segmentBookingHeader = CreateBookingAccordionHeader("AddSegmentHeader", bookingAccordionContent, "●", "ADD SEGMENT",
                 new Color32(185, 103, 255, 255), out segmentBookingArrow);
+            segmentBookingHeader.AddComponent<LayoutElement>().preferredHeight = 72;
             segmentBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleSegmentBooking);
-            segmentBookingBody = CreateRuntimePanel("SegmentBookingBody", workspacePanel.transform, new Color32(12, 10, 25, 255), Vector2.zero, Vector2.one);
+            segmentBookingBody = CreateRuntimePanel("SegmentBookingBody", bookingAccordionContent, new Color32(12, 10, 25, 255), Vector2.zero, Vector2.one);
+            segmentBookingBody.AddComponent<LayoutElement>().preferredHeight = 300;
             matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
+            if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 1f;
             return panel;
         }
 
@@ -1307,19 +1360,126 @@ namespace WrestlingUniverse.UI
             bookingShowNameText.text = showName.ToUpperInvariant();
             bookingScheduleText.text = sourceType.ToUpperInvariant() + "  /  " + month.ToUpperInvariant() + " " + calendarYear +
                                        "  /  WEEK " + (week + 1) + "  /  " + dayName.ToUpperInvariant();
+            matchStipulationDropdown.value = 0; matchStipulationDropdown.RefreshShownValue();
+            RefreshMatchFormats(); matchGenderDropdown.value = 0; matchGenderDropdown.RefreshShownValue();
+            PopulateMatchTitleDropdown();
+            LoadBookingRoster(sourceId, sourceType); selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
             matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
+            if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 1f;
+        }
+
+        private void PopulateMatchTitleDropdown()
+        {
+            matchTitleOptions = repository.LoadTitles(ActiveUniverseSession.UniverseId);
+            var options = new List<string> { "None" };
+            foreach (var title in matchTitleOptions) options.Add(title.name);
+            matchTitleDropdown.ClearOptions(); matchTitleDropdown.AddOptions(options);
+            matchTitleDropdown.value = 0; matchTitleDropdown.RefreshShownValue();
+        }
+
+        private void LoadBookingRoster(string sourceId, string sourceType)
+        {
+            activeBookingBrandNames = new List<string>();
+            if (sourceType == "TV Show")
+            {
+                var show = repository.LoadTvShows(ActiveUniverseSession.UniverseId).Find(item => item.id == sourceId);
+                if (show != null) activeBookingBrandNames.AddRange(show.brandNames);
+            }
+            else
+            {
+                var special = repository.LoadSpecials(ActiveUniverseSession.UniverseId).Find(item => item.id == sourceId);
+                if (special != null) activeBookingBrandNames.AddRange(special.brandNames);
+            }
+        }
+
+        private void RefreshMatchFormats()
+        {
+            var stipulation = matchStipulationDropdown.options[matchStipulationDropdown.value].text;
+            var formats = stipulation == "Tag Team" ? new List<string> { "Tag Team" } : new List<string>(MatchFormats);
+            matchFormatDropdown.ClearOptions(); matchFormatDropdown.AddOptions(formats); matchFormatDropdown.value = 0; matchFormatDropdown.RefreshShownValue();
+            selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
+        }
+
+        private void HandleMatchFormatChanged()
+        {
+            var needed = RequiredMatchParticipants();
+            while (selectedMatchParticipantIds.Count > needed) selectedMatchParticipantIds.RemoveAt(selectedMatchParticipantIds.Count - 1);
+            RefreshMatchParticipants();
+        }
+
+        private int RequiredMatchParticipants()
+        {
+            if (matchFormatDropdown == null || matchFormatDropdown.options.Count == 0) return 2;
+            var format = matchFormatDropdown.options[matchFormatDropdown.value].text;
+            if (format == "Triple Threat") return 3;
+            if (format == "Fatal 4-Way" || format == "Tag Team") return 4;
+            if (format == "5-Way") return 5;
+            if (format == "6-Way") return 6;
+            if (format == "8-Way") return 8;
+            return 2;
+        }
+
+        private void ToggleMatchParticipantMenu()
+        {
+            matchParticipantMenu.SetActive(!matchParticipantMenu.activeSelf);
+            if (matchParticipantMenu.activeSelf) matchParticipantMenu.transform.SetAsLastSibling();
+        }
+
+        private void RefreshMatchParticipants()
+        {
+            if (repository == null || matchParticipantMenu == null || matchGenderDropdown == null) return;
+            var gender = matchGenderDropdown.options[matchGenderDropdown.value].text;
+            availableMatchParticipants = repository.LoadWrestlers(ActiveUniverseSession.UniverseId).FindAll(wrestler =>
+                (activeBookingBrandNames.Count == 0 || activeBookingBrandNames.Contains(wrestler.brand)) &&
+                (gender == "Both Genders" || wrestler.gender == gender));
+            selectedMatchParticipantIds.RemoveAll(id => availableMatchParticipants.Find(wrestler => wrestler.id == id) == null);
+            for (var index = matchParticipantMenu.transform.childCount - 1; index >= 0; index--) Destroy(matchParticipantMenu.transform.GetChild(index).gameObject);
+            var count = Mathf.Max(1, availableMatchParticipants.Count); var rowHeight = 1f / count;
+            for (var index = 0; index < availableMatchParticipants.Count; index++)
+            {
+                var wrestler = availableMatchParticipants[index]; var top = 1f - index * rowHeight; var bottom = top - rowHeight;
+                var selected = selectedMatchParticipantIds.Contains(wrestler.id);
+                var row = CreateRuntimeButton("Participant_" + wrestler.id, matchParticipantMenu.transform, (selected ? "✓  " : "     ") + wrestler.name,
+                    new Vector2(.015f, bottom), new Vector2(.985f, top), selected ? new Color32(25, 65, 82, 255) : new Color32(9, 15, 29, 255), Color.white);
+                row.onClick.AddListener(() => ToggleMatchParticipant(wrestler.id));
+            }
+            if (availableMatchParticipants.Count == 0)
+                CreateRuntimeText("NoParticipants", matchParticipantMenu.transform, "No eligible wrestlers for this show and filter", 13,
+                    new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            UpdateMatchParticipantCaption();
+        }
+
+        private void ToggleMatchParticipant(string wrestlerId)
+        {
+            if (selectedMatchParticipantIds.Contains(wrestlerId)) selectedMatchParticipantIds.Remove(wrestlerId);
+            else if (selectedMatchParticipantIds.Count < RequiredMatchParticipants()) selectedMatchParticipantIds.Add(wrestlerId);
+            UpdateMatchParticipantCaption(); RefreshMatchParticipants(); matchParticipantMenu.SetActive(true);
+        }
+
+        private void UpdateMatchParticipantCaption()
+        {
+            var needed = RequiredMatchParticipants(); var names = new List<string>();
+            foreach (var id in selectedMatchParticipantIds)
+            { var wrestler = availableMatchParticipants.Find(item => item.id == id); if (wrestler != null) names.Add(wrestler.name); }
+            matchParticipantCaption.text = names.Count == 0 ? "Select " + needed + " wrestlers" :
+                string.Join(", ", names.ToArray()) + "  (" + names.Count + "/" + needed + ")";
         }
 
         private void ToggleMatchBooking()
         {
             matchBookingExpanded = !matchBookingExpanded;
+            if (matchBookingExpanded) segmentBookingExpanded = false;
+            if (!matchBookingExpanded && matchParticipantMenu != null) matchParticipantMenu.SetActive(false);
             RefreshBookingAccordionLayout();
+            if (bookingAccordionScroll != null && matchBookingExpanded) bookingAccordionScroll.verticalNormalizedPosition = 1f;
         }
 
         private void ToggleSegmentBooking()
         {
             segmentBookingExpanded = !segmentBookingExpanded;
+            if (segmentBookingExpanded) { matchBookingExpanded = false; if (matchParticipantMenu != null) matchParticipantMenu.SetActive(false); }
             RefreshBookingAccordionLayout();
+            if (bookingAccordionScroll != null && segmentBookingExpanded) bookingAccordionScroll.verticalNormalizedPosition = 0f;
         }
 
         private void RefreshBookingAccordionLayout()
@@ -1328,31 +1488,8 @@ namespace WrestlingUniverse.UI
             matchBookingBody.SetActive(matchBookingExpanded); segmentBookingBody.SetActive(segmentBookingExpanded);
             matchBookingArrow.text = matchBookingExpanded ? "▲" : "▼";
             segmentBookingArrow.text = segmentBookingExpanded ? "▲" : "▼";
-
-            if (matchBookingExpanded && segmentBookingExpanded)
-            {
-                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .84f), new Vector2(.975f, .98f));
-                SetRuntimeRect(matchBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .57f), new Vector2(.975f, .83f));
-                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .42f), new Vector2(.975f, .56f));
-                SetRuntimeRect(segmentBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .08f), new Vector2(.975f, .41f));
-            }
-            else if (matchBookingExpanded)
-            {
-                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .80f), new Vector2(.975f, .98f));
-                SetRuntimeRect(matchBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .40f), new Vector2(.975f, .79f));
-                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .13f), new Vector2(.975f, .34f));
-            }
-            else if (segmentBookingExpanded)
-            {
-                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .79f), new Vector2(.975f, .98f));
-                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .55f), new Vector2(.975f, .74f));
-                SetRuntimeRect(segmentBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .08f), new Vector2(.975f, .54f));
-            }
-            else
-            {
-                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .66f), new Vector2(.975f, .90f));
-                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .30f), new Vector2(.975f, .54f));
-            }
+            Canvas.ForceUpdateCanvases();
+            if (bookingAccordionContent != null) LayoutRebuilder.ForceRebuildLayoutImmediate(bookingAccordionContent);
         }
 
         private static int CalendarDayIndex(string day)
