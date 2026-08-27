@@ -158,6 +158,7 @@ namespace WrestlingUniverse.UI
         private Text bookingScheduleText;
         private GameObject matchBookingHeader;
         private GameObject matchBookingBody;
+        private LayoutElement matchBookingBodyLayout;
         private Text matchBookingArrow;
         private GameObject segmentBookingHeader;
         private GameObject segmentBookingBody;
@@ -171,7 +172,12 @@ namespace WrestlingUniverse.UI
         private Dropdown matchTitleDropdown;
         private List<TitleRecord> matchTitleOptions = new List<TitleRecord>();
         private Dropdown matchGenderDropdown;
+        private GameObject matchStagesGroup;
+        private Dropdown matchStageOneDropdown;
+        private Dropdown matchStageTwoDropdown;
+        private Dropdown matchStageThreeDropdown;
         private GameObject matchParticipantMenu;
+        private Button matchParticipantSelector;
         private Text matchParticipantCaption;
         private readonly List<string> selectedMatchParticipantIds = new List<string>();
         private List<WrestlerRecord> availableMatchParticipants = new List<WrestlerRecord>();
@@ -187,7 +193,7 @@ namespace WrestlingUniverse.UI
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
-        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs", "Submission Match", "Last Man Standing", "No Holds Barred", "Iron Man Match", "Casket Match", "Ambulance Match", "Dumpster Match", "I Quit Match", "Inferno Match", "Elimination Chamber", "War Games" };
+        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs", "Submission Match", "Last Man Standing", "No Holds Barred", "Iron Man Match", "Casket Match", "Ambulance Match", "Dumpster Match", "I Quit Match", "Inferno Match", "Elimination Chamber", "War Games", "Underground Match", "3 Stages of Hell" };
         private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
         private static readonly string[] TagTeamMatchFormats = {
             "Two on Two", "Two on Two - Mixed Tag", "Two on Two - Tornado Tag", "Three on Three", "Three on Three - Tornado Tag",
@@ -213,6 +219,11 @@ namespace WrestlingUniverse.UI
         private static readonly string[] OneOnOneOnlyMatchFormats = { "One on One" };
         private static readonly string[] SixWayOnlyMatchFormats = { "6-Way" };
         private static readonly string[] WarGamesMatchFormats = { "Three on Three", "Four on Four" };
+        private static readonly string[] ThreeStagesOfHellOptions = {
+            "Normal", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Submission Match", "I Quit",
+            "Iron Man", "Last Man Standing", "No Holds Barred", "Casket Match", "Ambulance Match", "Inferno Match",
+            "Dumpster Match", "Underground Match", "Bloodline Rules"
+        };
         private static readonly string[] MatchGenderFilters = { "Both Genders", "Male", "Female", "Neutral" };
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
@@ -685,7 +696,7 @@ namespace WrestlingUniverse.UI
             matchBookingHeader.AddComponent<LayoutElement>().preferredHeight = 72;
             matchBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleMatchBooking);
             matchBookingBody = CreateRuntimePanel("MatchBookingBody", bookingAccordionContent, new Color32(8, 15, 27, 255), Vector2.zero, Vector2.one);
-            matchBookingBody.AddComponent<LayoutElement>().preferredHeight = 500;
+            matchBookingBodyLayout = matchBookingBody.AddComponent<LayoutElement>(); matchBookingBodyLayout.preferredHeight = 500;
             matchStipulationDropdown = CreateRuntimeDropdown("MatchStipulation", matchBookingBody.transform, "STIPULATION", MatchStipulations, 0,
                 new Vector2(.035f, .76f), new Vector2(.485f, .96f));
             matchFormatDropdown = CreateRuntimeDropdown("MatchFormat", matchBookingBody.transform, "FORMAT", MatchFormats, 0,
@@ -694,8 +705,9 @@ namespace WrestlingUniverse.UI
                 new Vector2(.035f, .52f), new Vector2(.61f, .71f));
             matchGenderDropdown = CreateRuntimeDropdown("MatchGender", matchBookingBody.transform, "GENDER FILTER", MatchGenderFilters, 0,
                 new Vector2(.64f, .52f), new Vector2(.965f, .71f));
-            var participantSelector = CreateRuntimeButton("MatchParticipantSelector", matchBookingBody.transform, string.Empty,
+            matchParticipantSelector = CreateRuntimeButton("MatchParticipantSelector", matchBookingBody.transform, string.Empty,
                 new Vector2(.035f, .23f), new Vector2(.965f, .45f), new Color32(5, 11, 23, 255), Color.white);
+            var participantSelector = matchParticipantSelector;
             var participantLabel = participantSelector.transform.Find("Label"); if (participantLabel != null) Destroy(participantLabel.gameObject);
             CreateRuntimeText("FieldLabel", participantSelector.transform, "PARTICIPANTS", 12, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
                 new Vector2(.035f, .58f), new Vector2(.96f, .94f), FontStyle.Bold);
@@ -707,6 +719,15 @@ namespace WrestlingUniverse.UI
                 new Vector2(0, 1f), new Vector2(1, 3.2f));
             var participantCanvas = matchParticipantMenu.AddComponent<Canvas>(); participantCanvas.overrideSorting = true; participantCanvas.sortingOrder = 500;
             matchParticipantMenu.AddComponent<GraphicRaycaster>(); matchParticipantMenu.SetActive(false);
+            matchStagesGroup = CreateRuntimePanel("ThreeStagesSelectors", matchBookingBody.transform, new Color32(8, 15, 27, 0),
+                new Vector2(.035f, .155f), new Vector2(.965f, .34f));
+            matchStageOneDropdown = CreateRuntimeDropdown("StageOne", matchStagesGroup.transform, "STAGE 1", ThreeStagesOfHellOptions, 0,
+                new Vector2(0, 0), new Vector2(.315f, 1));
+            matchStageTwoDropdown = CreateRuntimeDropdown("StageTwo", matchStagesGroup.transform, "STAGE 2", ThreeStagesOfHellOptions, 1,
+                new Vector2(.3425f, 0), new Vector2(.6575f, 1));
+            matchStageThreeDropdown = CreateRuntimeDropdown("StageThree", matchStagesGroup.transform, "STAGE 3", ThreeStagesOfHellOptions, 2,
+                new Vector2(.685f, 0), new Vector2(1, 1));
+            matchStagesGroup.SetActive(false);
             matchBookingValidationText = CreateRuntimeText("MatchValidation", matchBookingBody.transform, string.Empty, 12, new Color32(255, 105, 105, 255),
                 TextAnchor.MiddleLeft, new Vector2(.035f, .15f), new Vector2(.72f, .22f), FontStyle.Bold);
             addMatchToCardButton = CreateRuntimeButton("AddMatchToCard", matchBookingBody.transform, "+  ADD TO CARD",
@@ -1452,14 +1473,47 @@ namespace WrestlingUniverse.UI
                     new List<string>(TablesLaddersChairsMatchFormats) :
                 (stipulation == "Submission Match" || stipulation == "Last Man Standing" || stipulation == "No Holds Barred" ||
                  stipulation == "Iron Man Match" || stipulation == "Casket Match" || stipulation == "Ambulance Match" ||
-                 stipulation == "Dumpster Match" || stipulation == "I Quit Match" || stipulation == "Inferno Match") ?
+                 stipulation == "Dumpster Match" || stipulation == "I Quit Match" || stipulation == "Inferno Match" ||
+                stipulation == "Underground Match") ?
                     new List<string>(OneOnOneOnlyMatchFormats) :
+                stipulation == "3 Stages of Hell" ? new List<string>(OneOnOneOnlyMatchFormats) :
                 stipulation == "Elimination Chamber" ? new List<string>(SixWayOnlyMatchFormats) :
                 stipulation == "War Games" ? new List<string>(WarGamesMatchFormats) :
                 stipulation == "Extreme Rules" ?
                     new List<string>(ExtremeRulesMatchFormats) : new List<string>(MatchFormats);
             matchFormatDropdown.ClearOptions(); matchFormatDropdown.AddOptions(formats); matchFormatDropdown.value = 0; matchFormatDropdown.RefreshShownValue();
+            SetThreeStagesControlsVisible(stipulation == "3 Stages of Hell");
             selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
+        }
+
+        private void SetThreeStagesControlsVisible(bool visible)
+        {
+            if (matchStagesGroup == null) return;
+            matchStagesGroup.SetActive(visible);
+            if (matchBookingBodyLayout != null) matchBookingBodyLayout.preferredHeight = visible ? 620f : 500f;
+            if (matchParticipantSelector != null)
+            {
+                var rect = matchParticipantSelector.GetComponent<RectTransform>();
+                rect.anchorMin = visible ? new Vector2(.035f, .37f) : new Vector2(.035f, .23f);
+                rect.anchorMax = visible ? new Vector2(.965f, .49f) : new Vector2(.965f, .45f);
+                rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
+            }
+            var validationRect = matchBookingValidationText == null ? null : matchBookingValidationText.rectTransform;
+            if (validationRect != null)
+            {
+                validationRect.anchorMin = visible ? new Vector2(.035f, .105f) : new Vector2(.035f, .15f);
+                validationRect.anchorMax = visible ? new Vector2(.72f, .15f) : new Vector2(.72f, .22f);
+                validationRect.offsetMin = Vector2.zero; validationRect.offsetMax = Vector2.zero;
+            }
+            var buttonRect = addMatchToCardButton == null ? null : addMatchToCardButton.GetComponent<RectTransform>();
+            if (buttonRect != null)
+            {
+                buttonRect.anchorMin = visible ? new Vector2(.035f, .015f) : new Vector2(.035f, .025f);
+                buttonRect.anchorMax = visible ? new Vector2(.965f, .095f) : new Vector2(.965f, .14f);
+                buttonRect.offsetMin = Vector2.zero; buttonRect.offsetMax = Vector2.zero;
+            }
+            Canvas.ForceUpdateCanvases();
+            if (bookingAccordionContent != null) LayoutRebuilder.ForceRebuildLayoutImmediate(bookingAccordionContent);
         }
 
         private void HandleMatchFormatChanged()
@@ -1549,6 +1603,9 @@ namespace WrestlingUniverse.UI
                     stipulation = matchStipulationDropdown.options[matchStipulationDropdown.value].text,
                     format = matchFormatDropdown.options[matchFormatDropdown.value].text,
                     titleId = matchTitleDropdown.value == 0 ? string.Empty : matchTitleOptions[matchTitleDropdown.value - 1].id,
+                    stageOneStipulation = matchStagesGroup.activeSelf ? matchStageOneDropdown.options[matchStageOneDropdown.value].text : string.Empty,
+                    stageTwoStipulation = matchStagesGroup.activeSelf ? matchStageTwoDropdown.options[matchStageTwoDropdown.value].text : string.Empty,
+                    stageThreeStipulation = matchStagesGroup.activeSelf ? matchStageThreeDropdown.options[matchStageThreeDropdown.value].text : string.Empty,
                     createdUtc = editingBookedMatch == null ? DateTime.UtcNow.ToString("O") : editingBookedMatch.createdUtc,
                     participantIds = new List<string>(selectedMatchParticipantIds) };
                 repository.SaveBookedMatch(match); editingBookedMatch = null; selectedMatchParticipantIds.Clear();
@@ -1585,6 +1642,10 @@ namespace WrestlingUniverse.UI
                 header.onClick.AddListener(() => ToggleBookedMatchCard(match.id));
                 if (!expanded) continue;
                 var body = CreateRuntimePanel("Body", card.transform, new Color32(10, 16, 27, 255), new Vector2(.015f, .03f), new Vector2(.985f, .78f));
+                if (match.stipulation == "3 Stages of Hell")
+                    CreateRuntimeText("Stages", body.transform, "STAGE 1: " + match.stageOneStipulation.ToUpperInvariant() + "    /    STAGE 2: " +
+                        match.stageTwoStipulation.ToUpperInvariant() + "    /    STAGE 3: " + match.stageThreeStipulation.ToUpperInvariant(),
+                        11, new Color32(255, 92, 92, 255), TextAnchor.MiddleCenter, new Vector2(.03f, .87f), new Vector2(.97f, .98f), FontStyle.Bold);
                 var participantCount = Mathf.Max(1, match.participants.Count); var slotWidth = .94f / participantCount;
                 for (var index = 0; index < match.participants.Count; index++)
                 {
@@ -1638,6 +1699,12 @@ namespace WrestlingUniverse.UI
             editingBookedMatch = match; matchBookingExpanded = true; segmentBookingExpanded = false;
             var savedStipulation = match.stipulation == "Tables, Ladders and Chairs Match" ? "Tables, Ladders, and Chairs" : match.stipulation;
             SetDropdownValue(matchStipulationDropdown, savedStipulation); RefreshMatchFormats(); SetDropdownValue(matchFormatDropdown, match.format);
+            if (savedStipulation == "3 Stages of Hell")
+            {
+                SetDropdownValue(matchStageOneDropdown, match.stageOneStipulation);
+                SetDropdownValue(matchStageTwoDropdown, match.stageTwoStipulation);
+                SetDropdownValue(matchStageThreeDropdown, match.stageThreeStipulation);
+            }
             matchGenderDropdown.value = 0; matchGenderDropdown.RefreshShownValue(); RefreshMatchParticipants();
             selectedMatchParticipantIds.Clear(); selectedMatchParticipantIds.AddRange(match.participantIds); RefreshMatchParticipants();
             var titleIndex = matchTitleOptions.FindIndex(item => item.id == match.titleId); matchTitleDropdown.value = titleIndex < 0 ? 0 : titleIndex + 1;

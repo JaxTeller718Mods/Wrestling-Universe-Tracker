@@ -19,6 +19,9 @@ namespace WrestlingUniverse.UI
         public string format;
         public string titleId;
         public string titleName;
+        public string stageOneStipulation;
+        public string stageTwoStipulation;
+        public string stageThreeStipulation;
         public string createdUtc;
         public List<string> participantIds = new List<string>();
         public List<WrestlerRecord> participants = new List<WrestlerRecord>();

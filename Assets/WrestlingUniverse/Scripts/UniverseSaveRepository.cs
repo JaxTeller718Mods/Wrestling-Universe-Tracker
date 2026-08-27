@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 11;
+        private const int CurrentSchemaVersion = 12;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -94,6 +94,9 @@ namespace WrestlingUniverse.Persistence
                     "source_type TEXT NOT NULL, calendar_year INTEGER NOT NULL, calendar_month TEXT NOT NULL, calendar_week INTEGER NOT NULL, " +
                     "day_of_week TEXT NOT NULL, card_position INTEGER NOT NULL, stipulation TEXT NOT NULL, format TEXT NOT NULL, title_id TEXT, " +
                     "created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                EnsureColumn(connection, transaction, "booked_matches", "stage_one_stipulation", "TEXT");
+                EnsureColumn(connection, transaction, "booked_matches", "stage_two_stipulation", "TEXT");
+                EnsureColumn(connection, transaction, "booked_matches", "stage_three_stipulation", "TEXT");
                 Execute(connection, transaction,
                     "CREATE TABLE IF NOT EXISTS booked_match_participants (match_id TEXT NOT NULL, wrestler_id TEXT NOT NULL, position INTEGER NOT NULL, " +
                     "PRIMARY KEY(match_id, wrestler_id), FOREIGN KEY(match_id) REFERENCES booked_matches(id) ON DELETE CASCADE, " +
@@ -546,7 +549,8 @@ namespace WrestlingUniverse.Persistence
             using (var command = CreateCommand(connection))
             {
                 command.CommandText = "SELECT m.id, m.universe_id, m.source_id, m.source_type, m.calendar_year, m.calendar_month, m.calendar_week, " +
-                    "m.day_of_week, m.card_position, m.stipulation, m.format, COALESCE(m.title_id, ''), COALESCE(t.name, ''), m.created_utc " +
+                    "m.day_of_week, m.card_position, m.stipulation, m.format, COALESCE(m.title_id, ''), COALESCE(t.name, ''), " +
+                    "COALESCE(m.stage_one_stipulation, ''), COALESCE(m.stage_two_stipulation, ''), COALESCE(m.stage_three_stipulation, ''), m.created_utc " +
                     "FROM booked_matches m LEFT JOIN titles t ON t.id = m.title_id WHERE m.universe_id=@universe AND m.source_id=@source " +
                     "AND m.calendar_year=@year AND m.calendar_month=@month AND m.calendar_week=@week AND m.day_of_week=@day ORDER BY m.card_position;";
                 AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
@@ -555,7 +559,8 @@ namespace WrestlingUniverse.Persistence
                     id = reader.GetString(0), universeId = reader.GetString(1), sourceId = reader.GetString(2), sourceType = reader.GetString(3),
                     year = reader.GetInt32(4), month = reader.GetString(5), week = reader.GetInt32(6), dayOfWeek = reader.GetString(7),
                     cardPosition = reader.GetInt32(8), stipulation = reader.GetString(9), format = reader.GetString(10), titleId = reader.GetString(11),
-                    titleName = reader.GetString(12), createdUtc = reader.GetString(13) });
+                    titleName = reader.GetString(12), stageOneStipulation = reader.GetString(13), stageTwoStipulation = reader.GetString(14),
+                    stageThreeStipulation = reader.GetString(15), createdUtc = reader.GetString(16) });
             }
             var wrestlers = LoadWrestlers(universeId);
             foreach (var match in results)
@@ -582,13 +587,17 @@ namespace WrestlingUniverse.Persistence
                 {
                     command.Transaction = transaction;
                     command.CommandText = "INSERT OR REPLACE INTO booked_matches(id, universe_id, source_id, source_type, calendar_year, calendar_month, " +
-                        "calendar_week, day_of_week, card_position, stipulation, format, title_id, created_utc, updated_utc) VALUES(@id,@universe,@source,@type," +
-                        "@year,@month,@week,@day,@position,@stipulation,@format,@title,@created,@updated);";
+                        "calendar_week, day_of_week, card_position, stipulation, format, title_id, stage_one_stipulation, stage_two_stipulation, " +
+                        "stage_three_stipulation, created_utc, updated_utc) VALUES(@id,@universe,@source,@type,@year,@month,@week,@day,@position," +
+                        "@stipulation,@format,@title,@stageOne,@stageTwo,@stageThree,@created,@updated);";
                     AddParameter(command, "@id", match.id); AddParameter(command, "@universe", match.universeId); AddParameter(command, "@source", match.sourceId);
                     AddParameter(command, "@type", match.sourceType); AddParameter(command, "@year", match.year); AddParameter(command, "@month", match.month);
                     AddParameter(command, "@week", match.week); AddParameter(command, "@day", match.dayOfWeek); AddParameter(command, "@position", match.cardPosition);
                     AddParameter(command, "@stipulation", match.stipulation); AddParameter(command, "@format", match.format);
                     AddParameter(command, "@title", string.IsNullOrEmpty(match.titleId) ? null : match.titleId);
+                    AddParameter(command, "@stageOne", string.IsNullOrEmpty(match.stageOneStipulation) ? null : match.stageOneStipulation);
+                    AddParameter(command, "@stageTwo", string.IsNullOrEmpty(match.stageTwoStipulation) ? null : match.stageTwoStipulation);
+                    AddParameter(command, "@stageThree", string.IsNullOrEmpty(match.stageThreeStipulation) ? null : match.stageThreeStipulation);
                     AddParameter(command, "@created", match.createdUtc); AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
                 }
                 using (var command = CreateCommand(connection))
