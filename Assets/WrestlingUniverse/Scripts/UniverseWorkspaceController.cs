@@ -156,6 +156,14 @@ namespace WrestlingUniverse.UI
         private GameObject showBookingPanel;
         private Text bookingShowNameText;
         private Text bookingScheduleText;
+        private GameObject matchBookingHeader;
+        private GameObject matchBookingBody;
+        private Text matchBookingArrow;
+        private GameObject segmentBookingHeader;
+        private GameObject segmentBookingBody;
+        private Text segmentBookingArrow;
+        private bool matchBookingExpanded;
+        private bool segmentBookingExpanded;
         private static readonly string[] ShowFrequencies = { "Weekly", "Bi-Weekly", "Monthly", "Special" };
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
@@ -614,10 +622,30 @@ namespace WrestlingUniverse.UI
                 new Vector2(.035f, .64f), new Vector2(.72f, .74f), FontStyle.Bold);
             var back = CreateRuntimeButton("BackToCalendarButton", panel.transform, "BACK TO CALENDAR", new Vector2(.79f, .84f), new Vector2(.965f, .95f),
                 new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowCalendar);
-            var blank = CreateRuntimePanel("BookingWorkspace", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .06f), new Vector2(.965f, .60f));
-            CreateRuntimeText("EmptyState", blank.transform, "BOOKING WORKSPACE\n\nMatches and show segments will be added here.", 20,
-                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            var workspacePanel = CreateRuntimePanel("BookingWorkspace", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .04f), new Vector2(.965f, .62f));
+            matchBookingHeader = CreateBookingAccordionHeader("AddMatchHeader", workspacePanel.transform, "+", "ADD MATCH",
+                new Color32(45, 190, 230, 255), out matchBookingArrow);
+            matchBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleMatchBooking);
+            matchBookingBody = CreateRuntimePanel("MatchBookingBody", workspacePanel.transform, new Color32(8, 15, 27, 255), Vector2.zero, Vector2.one);
+            segmentBookingHeader = CreateBookingAccordionHeader("AddSegmentHeader", workspacePanel.transform, "●", "ADD SEGMENT",
+                new Color32(185, 103, 255, 255), out segmentBookingArrow);
+            segmentBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleSegmentBooking);
+            segmentBookingBody = CreateRuntimePanel("SegmentBookingBody", workspacePanel.transform, new Color32(12, 10, 25, 255), Vector2.zero, Vector2.one);
+            matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
             return panel;
+        }
+
+        private GameObject CreateBookingAccordionHeader(string name, Transform parent, string icon, string label, Color accent, out Text arrow)
+        {
+            var button = CreateRuntimeButton(name, parent, string.Empty, Vector2.zero, Vector2.one, new Color32(7, 12, 22, 255), Color.white);
+            var oldLabel = button.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
+            CreateRuntimeText("Icon", button.transform, icon, 26, accent, TextAnchor.MiddleCenter,
+                new Vector2(.025f, .12f), new Vector2(.085f, .88f), FontStyle.Bold);
+            CreateRuntimeText("Title", button.transform, label, 19, accent, TextAnchor.MiddleLeft,
+                new Vector2(.095f, .08f), new Vector2(.75f, .92f), FontStyle.Bold);
+            arrow = CreateRuntimeText("Arrow", button.transform, "▼", 17, new Color32(190, 198, 210, 255), TextAnchor.MiddleCenter,
+                new Vector2(.92f, .10f), new Vector2(.98f, .90f), FontStyle.Bold);
+            return button.gameObject;
         }
 
         private GameObject CreateLocationCreationPanel(Transform workspace)
@@ -1279,6 +1307,52 @@ namespace WrestlingUniverse.UI
             bookingShowNameText.text = showName.ToUpperInvariant();
             bookingScheduleText.text = sourceType.ToUpperInvariant() + "  /  " + month.ToUpperInvariant() + " " + calendarYear +
                                        "  /  WEEK " + (week + 1) + "  /  " + dayName.ToUpperInvariant();
+            matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
+        }
+
+        private void ToggleMatchBooking()
+        {
+            matchBookingExpanded = !matchBookingExpanded;
+            RefreshBookingAccordionLayout();
+        }
+
+        private void ToggleSegmentBooking()
+        {
+            segmentBookingExpanded = !segmentBookingExpanded;
+            RefreshBookingAccordionLayout();
+        }
+
+        private void RefreshBookingAccordionLayout()
+        {
+            if (matchBookingHeader == null || segmentBookingHeader == null) return;
+            matchBookingBody.SetActive(matchBookingExpanded); segmentBookingBody.SetActive(segmentBookingExpanded);
+            matchBookingArrow.text = matchBookingExpanded ? "▲" : "▼";
+            segmentBookingArrow.text = segmentBookingExpanded ? "▲" : "▼";
+
+            if (matchBookingExpanded && segmentBookingExpanded)
+            {
+                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .84f), new Vector2(.975f, .98f));
+                SetRuntimeRect(matchBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .57f), new Vector2(.975f, .83f));
+                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .42f), new Vector2(.975f, .56f));
+                SetRuntimeRect(segmentBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .08f), new Vector2(.975f, .41f));
+            }
+            else if (matchBookingExpanded)
+            {
+                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .80f), new Vector2(.975f, .98f));
+                SetRuntimeRect(matchBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .40f), new Vector2(.975f, .79f));
+                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .13f), new Vector2(.975f, .34f));
+            }
+            else if (segmentBookingExpanded)
+            {
+                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .79f), new Vector2(.975f, .98f));
+                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .55f), new Vector2(.975f, .74f));
+                SetRuntimeRect(segmentBookingBody.GetComponent<RectTransform>(), new Vector2(.025f, .08f), new Vector2(.975f, .54f));
+            }
+            else
+            {
+                SetRuntimeRect(matchBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .66f), new Vector2(.975f, .90f));
+                SetRuntimeRect(segmentBookingHeader.GetComponent<RectTransform>(), new Vector2(.025f, .30f), new Vector2(.975f, .54f));
+            }
         }
 
         private static int CalendarDayIndex(string day)
