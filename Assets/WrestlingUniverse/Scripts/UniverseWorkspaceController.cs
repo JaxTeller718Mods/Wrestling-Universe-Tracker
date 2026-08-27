@@ -187,7 +187,7 @@ namespace WrestlingUniverse.UI
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
-        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules" };
+        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage" };
         private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
         private static readonly string[] TagTeamMatchFormats = {
             "Two on Two", "Two on Two - Mixed Tag", "Two on Two - Tornado Tag", "Three on Three", "Three on Three - Tornado Tag",
@@ -1425,7 +1425,8 @@ namespace WrestlingUniverse.UI
         {
             var stipulation = matchStipulationDropdown.options[matchStipulationDropdown.value].text;
             var formats = stipulation == "Tag Team" ? new List<string>(TagTeamMatchFormats) :
-                stipulation == "Extreme Rules" ? new List<string>(ExtremeRulesMatchFormats) : new List<string>(MatchFormats);
+                (stipulation == "Extreme Rules" || stipulation == "Falls Count Anywhere" || stipulation == "Hell in a Cell" || stipulation == "Steel Cage") ?
+                    new List<string>(ExtremeRulesMatchFormats) : new List<string>(MatchFormats);
             matchFormatDropdown.ClearOptions(); matchFormatDropdown.AddOptions(formats); matchFormatDropdown.value = 0; matchFormatDropdown.RefreshShownValue();
             selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
         }
@@ -1545,7 +1546,8 @@ namespace WrestlingUniverse.UI
                 var header = CreateRuntimeButton("Header", card.transform, string.Empty, new Vector2(0, expanded ? .80f : 0), Vector2.one,
                     new Color32(7, 12, 22, 255), Color.white);
                 var oldLabel = header.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
-                CreateRuntimeText("Title", header.transform, "#" + match.cardPosition + "  " + BuildMatchupLabel(match) + "  [" + match.format.ToUpperInvariant() + "]",
+                CreateRuntimeText("Title", header.transform, "#" + match.cardPosition + "  " + BuildMatchupLabel(match) + "  [" +
+                    match.stipulation.ToUpperInvariant() + " - " + match.format.ToUpperInvariant() + "]",
                     15, Color.white, TextAnchor.MiddleLeft, new Vector2(.035f, .08f), new Vector2(.90f, .92f), FontStyle.Bold);
                 CreateRuntimeText("Arrow", header.transform, expanded ? "▲" : "▼", 15, new Color32(190, 198, 210, 255), TextAnchor.MiddleCenter,
                     new Vector2(.92f, .08f), new Vector2(.98f, .92f), FontStyle.Bold);
