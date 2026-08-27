@@ -79,6 +79,36 @@ namespace WrestlingUniverse.UI
         private static readonly string[] TitleDivisions = { "Men's", "Women's", "Tag Team" };
         private GameObject titleHistoryPanel;
         private Text titleHistoryNameText;
+        private GameObject brandsView;
+        private GameObject showsView;
+        private GameObject locationsView;
+        private GameObject locationCreationPanel;
+        private Transform locationGrid;
+        private Text emptyLocationsText;
+        private Text locationCountText;
+        private InputField venueNameInput;
+        private InputField venueLocationInput;
+        private InputField venueCapacityInput;
+        private Text locationValidationText;
+        private Text locationFormTitle;
+        private Text locationSaveLabel;
+        private LocationRecord editingLocation;
+        private GameObject brandCreationPanel;
+        private GameObject brandInfoPanel;
+        private Transform brandGrid;
+        private Text emptyBrandsText;
+        private Text brandCountText;
+        private InputField brandNameInput;
+        private InputField brandColorInput;
+        private GameObject brandImageHost;
+        private Text brandImageStatus;
+        private Text brandValidationText;
+        private Text brandFormTitle;
+        private Text brandSaveLabel;
+        private Text brandInfoTitle;
+        private Text brandInfoRoster;
+        private BrandRecord editingBrand;
+        private string selectedBrandImagePath;
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
         private static readonly string[] Genders = { "Male", "Female", "Neutral" };
@@ -145,6 +175,25 @@ namespace WrestlingUniverse.UI
             sectionContentText.gameObject.SetActive(false); titlesView.SetActive(true); RefreshTitleCards();
         }
 
+        public void ShowBrands()
+        {
+            ShowUniverseSetupView("BRANDS", brandsView);
+            RefreshBrandCards();
+        }
+        public void ShowShows() => ShowUniverseSetupView("SHOWS", showsView);
+        public void ShowLocations()
+        {
+            ShowUniverseSetupView("LOCATIONS", locationsView);
+            RefreshLocationCards();
+        }
+
+        private void ShowUniverseSetupView(string title, GameObject view)
+        {
+            SelectSection("MyUniverseButton", title, string.Empty);
+            sectionContentText.gameObject.SetActive(false);
+            view.SetActive(true);
+        }
+
         public void ShowBooking() => SelectSection("BookingButton", "BOOKING",
             "BOOKING CENTER\n\nShows, events, matches, and segments will be created here.");
 
@@ -167,6 +216,12 @@ namespace WrestlingUniverse.UI
             if (titlesView != null) titlesView.SetActive(false);
             if (titleCreationPanel != null) titleCreationPanel.SetActive(false);
             if (titleHistoryPanel != null) titleHistoryPanel.SetActive(false);
+            if (brandsView != null) brandsView.SetActive(false);
+            if (showsView != null) showsView.SetActive(false);
+            if (locationsView != null) locationsView.SetActive(false);
+            if (locationCreationPanel != null) locationCreationPanel.SetActive(false);
+            if (brandCreationPanel != null) brandCreationPanel.SetActive(false);
+            if (brandInfoPanel != null) brandInfoPanel.SetActive(false);
             var navigation = sectionTitleText.transform.root.Find("Background/WorkspaceNavigation");
             if (navigation == null) return;
             foreach (Transform child in navigation)
@@ -203,12 +258,133 @@ namespace WrestlingUniverse.UI
             titlesView = CreateTitlesView(workspace);
             titleCreationPanel = CreateTitleCreationPanel(workspace);
             titleHistoryPanel = CreateTitleHistoryPanel(workspace);
+            brandsView = CreateBrandsView(workspace);
+            brandCreationPanel = CreateBrandCreationPanel(workspace);
+            brandInfoPanel = CreateBrandInfoPanel(workspace);
+            showsView = CreateUniverseSetupView(workspace, "ShowsView", "SHOWS", "+  CREATE SHOW",
+                "NO SHOWS CREATED\n\nWeekly shows and major PPV / PLE events such as WrestleMania will be created and edited here.");
+            locationsView = CreateLocationsView(workspace);
+            locationCreationPanel = CreateLocationCreationPanel(workspace);
             rosterView.SetActive(false);
             wrestlerCreationPanel.SetActive(false);
             teamsView.SetActive(false);
             teamCreationPanel.SetActive(false);
             titlesView.SetActive(false); titleCreationPanel.SetActive(false);
             titleHistoryPanel.SetActive(false);
+            brandsView.SetActive(false); showsView.SetActive(false); locationsView.SetActive(false);
+            locationCreationPanel.SetActive(false);
+            brandCreationPanel.SetActive(false); brandInfoPanel.SetActive(false);
+        }
+
+        private GameObject CreateUniverseSetupView(Transform workspace, string objectName, string heading, string action, string emptyMessage)
+        {
+            var view = CreateRuntimePanel(objectName, workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("Toolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
+            CreateRuntimeText("Heading", toolbar.transform, heading, 18, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+            CreateRuntimeButton("CreateButton", toolbar.transform, action, new Vector2(.76f, .16f), new Vector2(.975f, .84f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255));
+            var table = CreateRuntimePanel("Table", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
+            CreateRuntimeText("EmptyState", table.transform, emptyMessage, 20, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private GameObject CreateLocationsView(Transform workspace)
+        {
+            var view = CreateRuntimePanel("LocationsView", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("LocationsToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
+            locationCountText = CreateRuntimeText("LocationCount", toolbar.transform, "LOCATIONS  /  0", 17, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+            var create = CreateRuntimeButton("CreateLocationButton", toolbar.transform, "+  CREATE LOCATION", new Vector2(.76f, .16f), new Vector2(.975f, .84f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); create.onClick.AddListener(ShowLocationCreation);
+            var table = CreateRuntimePanel("LocationTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
+            table.AddComponent<RectMask2D>(); var scroll = table.AddComponent<ScrollRect>();
+            scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 4f; scroll.movementType = ScrollRect.MovementType.Clamped;
+            locationGrid = new GameObject("LocationCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter)).transform;
+            locationGrid.SetParent(table.transform, false); var locationRect = locationGrid.GetComponent<RectTransform>();
+            locationRect.anchorMin = new Vector2(.02f, 1); locationRect.anchorMax = new Vector2(.98f, 1); locationRect.pivot = new Vector2(.5f, 1);
+            locationRect.anchoredPosition = new Vector2(0, -18); locationRect.sizeDelta = new Vector2(0, 180);
+            var grid = locationGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(420, 160); grid.spacing = new Vector2(20, 18);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 3; grid.childAlignment = TextAnchor.UpperCenter;
+            locationGrid.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.viewport = table.GetComponent<RectTransform>(); scroll.content = locationRect;
+            emptyLocationsText = CreateRuntimeText("EmptyLocations", table.transform, "NO LOCATIONS CREATED\n\nCreate the first venue for this universe.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private GameObject CreateBrandsView(Transform workspace)
+        {
+            var view = CreateRuntimePanel("BrandsView", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("BrandsToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
+            brandCountText = CreateRuntimeText("BrandCount", toolbar.transform, "BRANDS  /  0", 17, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+            var create = CreateRuntimeButton("CreateBrandButton", toolbar.transform, "+  CREATE BRAND", new Vector2(.76f, .16f), new Vector2(.975f, .84f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); create.onClick.AddListener(ShowBrandCreation);
+            var table = CreateRuntimePanel("BrandTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
+            brandGrid = new GameObject("BrandCardGrid", typeof(RectTransform), typeof(GridLayoutGroup)).transform;
+            brandGrid.SetParent(table.transform, false); SetRuntimeRect(brandGrid.GetComponent<RectTransform>(), new Vector2(.02f, .05f), new Vector2(.98f, .95f));
+            var grid = brandGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(330, 180); grid.spacing = new Vector2(18, 18);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 4; grid.childAlignment = TextAnchor.UpperCenter;
+            emptyBrandsText = CreateRuntimeText("EmptyBrands", table.transform, "NO BRANDS CREATED\n\nCreate Raw, SmackDown, ECW, NXT, or your own brand.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private GameObject CreateBrandCreationPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("BrandCreationPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            brandFormTitle = CreateRuntimeText("Title", panel.transform, "CREATE BRAND", 27, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .84f), new Vector2(.55f, .98f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToBrandsButton", panel.transform, "BACK TO BRANDS", new Vector2(.80f, .86f), new Vector2(.965f, .96f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowBrands);
+            brandNameInput = CreateRuntimeInput("BrandName", panel.transform, "BRAND NAME", "Brand name", new Vector2(.035f, .59f), new Vector2(.60f, .80f));
+            brandColorInput = CreateRuntimeInput("BrandColor", panel.transform, "BRAND COLOR  (HEX)", "#E2231A", new Vector2(.035f, .34f), new Vector2(.38f, .54f));
+            brandColorInput.characterLimit = 7;
+            brandImageHost = CreateRuntimePanel("BrandImage", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.63f, .32f), new Vector2(.965f, .80f));
+            var choose = CreateRuntimeButton("ChooseBrandImage", brandImageHost.transform, "+  CHOOSE IMAGE", new Vector2(.06f, .05f), new Vector2(.94f, .24f),
+                new Color32(25, 45, 65, 255), Color.white); choose.onClick.AddListener(PickBrandImage);
+            brandImageStatus = CreateRuntimeText("ImageStatus", panel.transform, "No image selected", 12, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.63f, .26f), new Vector2(.965f, .32f));
+            brandValidationText = CreateRuntimeText("Validation", panel.transform, string.Empty, 13, new Color32(255, 105, 105, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .10f), new Vector2(.68f, .28f), FontStyle.Bold);
+            var save = CreateRuntimeButton("SaveBrandButton", panel.transform, "CREATE BRAND", new Vector2(.76f, .08f), new Vector2(.965f, .23f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); brandSaveLabel = save.transform.Find("Label").GetComponent<Text>();
+            save.onClick.AddListener(SaveBrand);
+            return panel;
+        }
+
+        private GameObject CreateBrandInfoPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("BrandInfoPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            brandInfoTitle = CreateRuntimeText("Title", panel.transform, "BRAND INFO", 27, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.04f, .78f), new Vector2(.68f, .96f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToBrandsButton", panel.transform, "BACK TO BRANDS", new Vector2(.80f, .82f), new Vector2(.965f, .94f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowBrands);
+            var rosterPanel = CreateRuntimePanel("AssignedRoster", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.04f, .08f), new Vector2(.96f, .72f));
+            brandInfoRoster = CreateRuntimeText("Roster", rosterPanel.transform, "NO ROSTER MEMBERS ASSIGNED", 18, new Color32(142, 160, 181, 255),
+                TextAnchor.UpperLeft, new Vector2(.05f, .08f), new Vector2(.95f, .92f), FontStyle.Bold);
+            return panel;
+        }
+
+        private GameObject CreateLocationCreationPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("LocationCreationPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            locationFormTitle = CreateRuntimeText("Title", panel.transform, "CREATE LOCATION", 27, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .84f), new Vector2(.55f, .98f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToLocationsButton", panel.transform, "BACK TO LOCATIONS", new Vector2(.78f, .86f), new Vector2(.965f, .96f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowLocations);
+            venueNameInput = CreateRuntimeInput("VenueName", panel.transform, "VENUE NAME", "Madison Square Garden", new Vector2(.035f, .60f), new Vector2(.965f, .80f));
+            venueLocationInput = CreateRuntimeInput("VenueLocation", panel.transform, "VENUE LOCATION", "New York, NY", new Vector2(.035f, .36f), new Vector2(.62f, .55f));
+            venueCapacityInput = CreateRuntimeInput("VenueCapacity", panel.transform, "VENUE CAPACITY", "19812", new Vector2(.65f, .36f), new Vector2(.965f, .55f));
+            venueCapacityInput.contentType = InputField.ContentType.IntegerNumber; venueCapacityInput.characterLimit = 9;
+            locationValidationText = CreateRuntimeText("Validation", panel.transform, string.Empty, 13, new Color32(255, 105, 105, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .13f), new Vector2(.70f, .30f), FontStyle.Bold);
+            var save = CreateRuntimeButton("SaveLocationButton", panel.transform, "CREATE LOCATION", new Vector2(.76f, .14f), new Vector2(.965f, .31f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); locationSaveLabel = save.transform.Find("Label").GetComponent<Text>();
+            save.onClick.AddListener(SaveLocation);
+            return panel;
         }
 
         private GameObject CreateTeamsView(Transform workspace)
@@ -418,8 +594,8 @@ namespace WrestlingUniverse.UI
             SelectSection("RosterButton", "CREATE TEAM", string.Empty);
             sectionContentText.gameObject.SetActive(false); teamCreationPanel.SetActive(true);
             editingTeam = null; teamFormTitle.text = "CREATE TEAM"; teamSaveLabel.text = "CREATE TEAM";
-            teamNameInput.text = string.Empty; teamBrandDropdown.value = 0; teamDispositionDropdown.value = 0;
-            teamBrandDropdown.RefreshShownValue(); teamDispositionDropdown.RefreshShownValue();
+            teamNameInput.text = string.Empty; PopulateBrandDropdown(teamBrandDropdown); teamDispositionDropdown.value = 0;
+            teamDispositionDropdown.RefreshShownValue();
             selectedTeamMemberIds.Clear(); teamValidationText.text = string.Empty; BuildMemberDropdown();
             selectedTeamPhotoPath = string.Empty; teamPhotoStatus.text = "No photo selected";
             var oldPreview = teamPhotoHost.transform.Find("PhotoPreview"); if (oldPreview != null) Destroy(oldPreview.gameObject);
@@ -428,7 +604,7 @@ namespace WrestlingUniverse.UI
         private void EditTeam(TeamRecord team)
         {
             ShowTeamCreation(); editingTeam = team; teamFormTitle.text = "EDIT TEAM"; teamSaveLabel.text = "SAVE CHANGES";
-            teamNameInput.text = team.name; SetDropdownValue(teamBrandDropdown, team.brand); SetDropdownValue(teamDispositionDropdown, team.disposition);
+            teamNameInput.text = team.name; PopulateBrandDropdown(teamBrandDropdown, team.brand); SetDropdownValue(teamDispositionDropdown, team.disposition);
             selectedTeamMemberIds.Clear(); selectedTeamMemberIds.AddRange(team.memberIds); BuildMemberDropdown();
             selectedTeamPhotoPath = string.Empty;
             teamPhotoStatus.text = string.IsNullOrEmpty(team.photoPath) ? "No photo selected" : System.IO.Path.GetFileName(team.photoPath);
@@ -543,8 +719,8 @@ namespace WrestlingUniverse.UI
         {
             SelectSection("RosterButton", "CREATE TITLE", string.Empty); sectionContentText.gameObject.SetActive(false); titleCreationPanel.SetActive(true);
             editingTitle = null; titleFormTitle.text = "CREATE TITLE"; titleSaveLabel.text = "CREATE TITLE";
-            titleNameInput.text = string.Empty; titleBrandDropdown.value = 0; titleDivisionDropdown.value = 0; selectedTitleImagePath = string.Empty;
-            titleBrandDropdown.RefreshShownValue(); titleDivisionDropdown.RefreshShownValue();
+            titleNameInput.text = string.Empty; PopulateBrandDropdown(titleBrandDropdown); titleDivisionDropdown.value = 0; selectedTitleImagePath = string.Empty;
+            titleDivisionDropdown.RefreshShownValue();
             titleImageStatus.text = "No image selected"; titleValidationText.text = string.Empty;
             var old = titleImageHost.transform.Find("ImagePreview"); if (old != null) Destroy(old.gameObject);
             titleHolderOptions = repository.LoadWrestlers(ActiveUniverseSession.UniverseId);
@@ -552,10 +728,151 @@ namespace WrestlingUniverse.UI
             titleHolderDropdown.ClearOptions(); titleHolderDropdown.AddOptions(options); titleHolderDropdown.value = 0; titleHolderDropdown.RefreshShownValue();
         }
 
+        private void ShowLocationCreation()
+        {
+            SelectSection("MyUniverseButton", "CREATE LOCATION", string.Empty); sectionContentText.gameObject.SetActive(false);
+            locationCreationPanel.SetActive(true); editingLocation = null; locationFormTitle.text = "CREATE LOCATION"; locationSaveLabel.text = "CREATE LOCATION";
+            venueNameInput.text = string.Empty; venueLocationInput.text = string.Empty; venueCapacityInput.text = string.Empty; locationValidationText.text = string.Empty;
+        }
+
+        private void ShowBrandCreation()
+        {
+            SelectSection("MyUniverseButton", "CREATE BRAND", string.Empty); sectionContentText.gameObject.SetActive(false); brandCreationPanel.SetActive(true);
+            editingBrand = null; brandFormTitle.text = "CREATE BRAND"; brandSaveLabel.text = "CREATE BRAND";
+            brandNameInput.text = string.Empty; brandColorInput.text = "#FFFFFF"; selectedBrandImagePath = string.Empty;
+            brandImageStatus.text = "No image selected"; brandValidationText.text = string.Empty;
+            var old = brandImageHost.transform.Find("ImagePreview"); if (old != null) Destroy(old.gameObject);
+        }
+
+        private void EditBrand(BrandRecord brand)
+        {
+            ShowBrandCreation(); editingBrand = brand; brandFormTitle.text = "EDIT BRAND"; brandSaveLabel.text = "SAVE CHANGES";
+            brandNameInput.text = brand.name; brandColorInput.text = brand.colorHex;
+            brandImageStatus.text = string.IsNullOrEmpty(brand.imagePath) ? "No image selected" : System.IO.Path.GetFileName(brand.imagePath);
+            var texture = UniverseImageStorage.LoadTexture(brand.imagePath);
+            if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(brandImageHost.transform, "ImagePreview", texture, new Vector2(.05f, .27f), new Vector2(.95f, .95f)); }
+        }
+
+        private void PickBrandImage()
+        {
+            string path; if (!WindowsImageFilePicker.TryPickImage(out path)) return;
+            var texture = UniverseImageStorage.LoadTexture(path);
+            if (texture == null) { brandValidationText.text = "Unity could not decode that image."; return; }
+            loadedTextures.Add(texture); selectedBrandImagePath = path; brandImageStatus.text = System.IO.Path.GetFileName(path);
+            SetRuntimePhoto(brandImageHost.transform, "ImagePreview", texture, new Vector2(.05f, .27f), new Vector2(.95f, .95f));
+        }
+
+        private void SaveBrand()
+        {
+            Color parsedColor;
+            var colorHex = brandColorInput.text.Trim(); if (!colorHex.StartsWith("#")) colorHex = "#" + colorHex;
+            if (string.IsNullOrWhiteSpace(brandNameInput.text)) { brandValidationText.text = "Brand name is required."; return; }
+            if (colorHex.Length != 7 || !ColorUtility.TryParseHtmlString(colorHex, out parsedColor))
+            { brandValidationText.text = "Use a six-digit HEX color such as #E2231A."; return; }
+            try
+            {
+                var brand = new BrandRecord { id = editingBrand == null ? Guid.NewGuid().ToString("N") : editingBrand.id,
+                    universeId = ActiveUniverseSession.UniverseId, name = brandNameInput.text.Trim(), colorHex = colorHex.ToUpperInvariant(),
+                    createdUtc = editingBrand == null ? DateTime.UtcNow.ToString("O") : editingBrand.createdUtc,
+                    imagePath = editingBrand == null ? string.Empty : editingBrand.imagePath };
+                if (!string.IsNullOrEmpty(selectedBrandImagePath))
+                    brand.imagePath = UniverseImageStorage.Import(brand.universeId, selectedBrandImagePath, "brand_" + brand.id);
+                repository.SaveBrand(brand);
+                if (editingBrand != null) repository.RenameBrandAssignments(brand.universeId, editingBrand.name, brand.name);
+                ShowBrands();
+            }
+            catch (Exception exception) { Debug.LogException(exception); brandValidationText.text = "The brand could not be saved. Brand names must be unique."; }
+        }
+
+        private void ShowBrandInfo(BrandRecord brand)
+        {
+            SelectSection("MyUniverseButton", "BRAND INFO", string.Empty); sectionContentText.gameObject.SetActive(false); brandInfoPanel.SetActive(true);
+            brandInfoTitle.text = brand.name.ToUpperInvariant() + "  /  ASSIGNED ROSTER";
+            var wrestlers = repository.LoadWrestlers(ActiveUniverseSession.UniverseId).FindAll(item => item.brand == brand.name);
+            if (wrestlers.Count == 0) brandInfoRoster.text = "NO ROSTER MEMBERS ASSIGNED TO THIS BRAND";
+            else
+            {
+                var lines = new List<string>(); foreach (var wrestler in wrestlers)
+                    lines.Add(wrestler.name + "    /    " + wrestler.disposition + "    /    " + wrestler.tier + "    /    OVR " + wrestler.overall);
+                brandInfoRoster.text = string.Join("\n\n", lines.ToArray());
+            }
+        }
+
+        private void RefreshBrandCards()
+        {
+            if (repository == null || brandGrid == null) return;
+            for (var index = brandGrid.childCount - 1; index >= 0; index--) Destroy(brandGrid.GetChild(index).gameObject);
+            var brands = repository.LoadBrands(ActiveUniverseSession.UniverseId);
+            brandCountText.text = "BRANDS  /  " + brands.Count; emptyBrandsText.gameObject.SetActive(brands.Count == 0);
+            foreach (var brand in brands)
+            {
+                Color accent; if (!ColorUtility.TryParseHtmlString(brand.colorHex, out accent)) accent = new Color32(45, 190, 230, 255);
+                var card = CreateRuntimePanel("Brand_" + brand.id, brandGrid, new Color(accent.r * .18f, accent.g * .18f, accent.b * .18f, 1), Vector2.zero, Vector2.one);
+                var texture = UniverseImageStorage.LoadTexture(brand.imagePath);
+                if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "BrandImage", texture, new Vector2(.05f, .38f), new Vector2(.95f, .95f)); }
+                CreateRuntimeText("Name", card.transform, brand.name.ToUpperInvariant(), 19, Color.white, TextAnchor.MiddleCenter,
+                    new Vector2(.05f, .24f), new Vector2(.95f, .39f), FontStyle.Bold);
+                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.05f, .04f), new Vector2(.48f, .20f),
+                    new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditBrand(brand));
+                var info = CreateRuntimeButton("InfoButton", card.transform, "INFO", new Vector2(.52f, .04f), new Vector2(.95f, .20f),
+                    new Color32(25, 45, 65, 255), Color.white); info.onClick.AddListener(() => ShowBrandInfo(brand));
+            }
+        }
+
+        private void PopulateBrandDropdown(Dropdown dropdown, string selected = "Unassigned")
+        {
+            var options = new List<string> { "Unassigned" };
+            foreach (var brand in repository.LoadBrands(ActiveUniverseSession.UniverseId)) options.Add(brand.name);
+            dropdown.ClearOptions(); dropdown.AddOptions(options); SetDropdownValue(dropdown, selected);
+        }
+
+        private void EditLocation(LocationRecord location)
+        {
+            ShowLocationCreation(); editingLocation = location; locationFormTitle.text = "EDIT LOCATION"; locationSaveLabel.text = "SAVE CHANGES";
+            venueNameInput.text = location.venueName; venueLocationInput.text = location.venueLocation; venueCapacityInput.text = location.capacity.ToString();
+        }
+
+        private void SaveLocation()
+        {
+            int capacity;
+            if (string.IsNullOrWhiteSpace(venueNameInput.text) || string.IsNullOrWhiteSpace(venueLocationInput.text))
+            { locationValidationText.text = "Venue name and location are required."; return; }
+            if (!int.TryParse(venueCapacityInput.text, out capacity) || capacity < 0)
+            { locationValidationText.text = "Venue capacity must be a valid non-negative number."; return; }
+            try
+            {
+                var location = new LocationRecord { id = editingLocation == null ? Guid.NewGuid().ToString("N") : editingLocation.id,
+                    universeId = ActiveUniverseSession.UniverseId, venueName = venueNameInput.text.Trim(), venueLocation = venueLocationInput.text.Trim(),
+                    capacity = capacity, createdUtc = editingLocation == null ? DateTime.UtcNow.ToString("O") : editingLocation.createdUtc };
+                repository.SaveLocation(location); ShowLocations();
+            }
+            catch (Exception exception) { Debug.LogException(exception); locationValidationText.text = "The location could not be saved. Check the Console."; }
+        }
+
+        private void RefreshLocationCards()
+        {
+            if (repository == null || locationGrid == null) return;
+            for (var index = locationGrid.childCount - 1; index >= 0; index--) Destroy(locationGrid.GetChild(index).gameObject);
+            var locations = repository.LoadLocations(ActiveUniverseSession.UniverseId);
+            locationCountText.text = "LOCATIONS  /  " + locations.Count; emptyLocationsText.gameObject.SetActive(locations.Count == 0);
+            foreach (var location in locations)
+            {
+                var card = CreateRuntimePanel("Location_" + location.id, locationGrid, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
+                CreateRuntimeText("Name", card.transform, location.venueName.ToUpperInvariant(), 19, Color.white, TextAnchor.MiddleLeft,
+                    new Vector2(.06f, .63f), new Vector2(.94f, .92f), FontStyle.Bold);
+                CreateRuntimeText("Location", card.transform, location.venueLocation.ToUpperInvariant(), 14, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                    new Vector2(.06f, .43f), new Vector2(.94f, .63f), FontStyle.Bold);
+                CreateRuntimeText("Capacity", card.transform, "CAPACITY  /  " + location.capacity.ToString("N0"), 14,
+                    new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.06f, .22f), new Vector2(.94f, .43f));
+                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .035f), new Vector2(.94f, .19f),
+                    new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditLocation(location));
+            }
+        }
+
         private void EditTitle(TitleRecord title)
         {
             ShowTitleCreation(); editingTitle = title; titleFormTitle.text = "EDIT TITLE"; titleSaveLabel.text = "SAVE CHANGES";
-            titleNameInput.text = title.name; SetDropdownValue(titleBrandDropdown, title.brand); SetDropdownValue(titleDivisionDropdown, title.division);
+            titleNameInput.text = title.name; PopulateBrandDropdown(titleBrandDropdown, title.brand); SetDropdownValue(titleDivisionDropdown, title.division);
             var holderIndex = string.IsNullOrEmpty(title.holderWrestlerId) ? -1 : titleHolderOptions.FindIndex(item => item.id == title.holderWrestlerId);
             titleHolderDropdown.value = holderIndex < 0 ? 0 : holderIndex + 1; titleHolderDropdown.RefreshShownValue();
             titleImageStatus.text = string.IsNullOrEmpty(title.imagePath) ? "No image selected" : System.IO.Path.GetFileName(title.imagePath);
@@ -630,7 +947,7 @@ namespace WrestlingUniverse.UI
             wrestlerSaveLabel.text = "SIGN WRESTLER";
             wrestlerNameInput.text = string.Empty;
             overallInput.text = "75";
-            brandDropdown.value = 0;
+            PopulateBrandDropdown(brandDropdown);
             dispositionDropdown.value = 0;
             genderDropdown.value = 0;
             tierDropdown.value = 1;
@@ -655,7 +972,7 @@ namespace WrestlingUniverse.UI
             wrestlerSaveLabel.text = "SAVE CHANGES";
             wrestlerNameInput.text = wrestler.name;
             overallInput.text = wrestler.overall.ToString();
-            SetDropdownValue(brandDropdown, wrestler.brand);
+            PopulateBrandDropdown(brandDropdown, wrestler.brand);
             SetDropdownValue(dispositionDropdown, wrestler.disposition);
             SetDropdownValue(genderDropdown, wrestler.gender);
             SetDropdownValue(tierDropdown, wrestler.tier);
@@ -891,6 +1208,7 @@ namespace WrestlingUniverse.UI
             if (existingNavigation != null)
             {
                 EnsureRosterDropdown(existingNavigation);
+                EnsureMyUniverseDropdown(existingNavigation);
                 return;
             }
 
@@ -914,6 +1232,29 @@ namespace WrestlingUniverse.UI
             CreateRuntimeNavigationButton(bar.transform, "ResultsButton", "RESULTS", .55f, .67f, ShowResults);
             CreateRuntimeNavigationButton(bar.transform, "AnalyticsButton", "ANALYTICS", .67f, .80f, ShowAnalytics);
             EnsureRosterDropdown(bar.transform);
+            EnsureMyUniverseDropdown(bar.transform);
+        }
+
+        private void EnsureMyUniverseDropdown(Transform navigation)
+        {
+            navigation.SetAsLastSibling();
+            var universeButton = navigation.Find("MyUniverseButton");
+            if (universeButton == null || universeButton.Find("MyUniverseDropdown") != null) return;
+
+            var menu = CreateRuntimePanel("MyUniverseDropdown", universeButton, new Color32(5, 9, 20, 255),
+                new Vector2(0, -2.25f), new Vector2(1, 0));
+            menu.transform.SetAsLastSibling();
+            var brands = CreateRuntimeButton("BrandsMenuItem", menu.transform, "BRANDS", new Vector2(0, .69f), new Vector2(1, .97f),
+                new Color32(9, 15, 29, 255), Color.white); brands.onClick.AddListener(ShowBrands);
+            var shows = CreateRuntimeButton("ShowsMenuItem", menu.transform, "SHOWS", new Vector2(0, .36f), new Vector2(1, .64f),
+                new Color32(9, 15, 29, 255), Color.white); shows.onClick.AddListener(ShowShows);
+            var locations = CreateRuntimeButton("LocationsMenuItem", menu.transform, "LOCATIONS", new Vector2(0, .03f), new Vector2(1, .31f),
+                new Color32(9, 15, 29, 255), Color.white); locations.onClick.AddListener(ShowLocations);
+
+            var hover = universeButton.gameObject.AddComponent<NavigationHoverDropdown>();
+            hover.Configure(menu);
+            universeButton.gameObject.AddComponent<NavigationHoverRelay>().Configure(hover);
+            menu.AddComponent<NavigationHoverRelay>().Configure(hover);
         }
 
         private void EnsureRosterDropdown(Transform navigation)

@@ -33,3 +33,7 @@ Teams also support an optional managed photo. It is copied into the universe ima
 Titles also store a Men's, Women's, or Tag Team division. Each title card includes **Edit**, which preloads all fields and preserves the existing belt image unless it is replaced.
 
 Each title card also includes **History**. It opens a title-specific blank history panel reserved for future championship reigns, holders, victories, vacancies, and dates.
+
+Hovering **My Universe** opens **Brands**, **Shows**, and **Locations**. Each has an independent blank panel and create action reserved respectively for brand identities, weekly/PPV/PLE events, and venues with capacity and geographic details.
+
+Locations persist per universe with venue name, free-form city/state location, and validated numeric capacity. Location cards display all three values and include an Edit action.

@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 6;
+        private const int CurrentSchemaVersion = 8;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -61,6 +61,16 @@ namespace WrestlingUniverse.Persistence
                     "FOREIGN KEY(holder_wrestler_id) REFERENCES wrestlers(id) ON DELETE SET NULL);");
                 EnsureColumn(connection, transaction, "titles", "division", "TEXT NOT NULL DEFAULT 'Men''s'");
                 Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_titles_universe ON titles(universe_id, name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS locations (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, venue_name TEXT NOT NULL, " +
+                    "venue_location TEXT NOT NULL, capacity INTEGER NOT NULL CHECK(capacity >= 0), created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_locations_universe ON locations(universe_id, venue_name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS brands (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, name TEXT NOT NULL, " +
+                    "image_path TEXT, color_hex TEXT NOT NULL, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE, UNIQUE(universe_id, name));");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_brands_universe ON brands(universe_id, name);");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -311,6 +321,86 @@ namespace WrestlingUniverse.Persistence
                 AddParameter(command, "@holder", string.IsNullOrEmpty(title.holderWrestlerId) ? null : title.holderWrestlerId);
                 AddParameter(command, "@image", title.imagePath); AddParameter(command, "@created", title.createdUtc);
                 AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+            }
+        }
+
+        public List<UI.LocationRecord> LoadLocations(string universeId)
+        {
+            var results = new List<UI.LocationRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT id, universe_id, venue_name, venue_location, capacity, created_utc FROM locations " +
+                                      "WHERE universe_id = @universeId ORDER BY venue_name COLLATE NOCASE;";
+                AddParameter(command, "@universeId", universeId);
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) results.Add(new UI.LocationRecord { id = reader.GetString(0), universeId = reader.GetString(1),
+                        venueName = reader.GetString(2), venueLocation = reader.GetString(3), capacity = reader.GetInt32(4), createdUtc = reader.GetString(5) });
+            }
+            return results;
+        }
+
+        public void SaveLocation(UI.LocationRecord location)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "INSERT OR REPLACE INTO locations(id, universe_id, venue_name, venue_location, capacity, created_utc, updated_utc) " +
+                                      "VALUES(@id, @universeId, @name, @location, @capacity, @created, @updated);";
+                AddParameter(command, "@id", location.id); AddParameter(command, "@universeId", location.universeId);
+                AddParameter(command, "@name", location.venueName); AddParameter(command, "@location", location.venueLocation);
+                AddParameter(command, "@capacity", location.capacity); AddParameter(command, "@created", location.createdUtc);
+                AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+            }
+        }
+
+        public List<UI.BrandRecord> LoadBrands(string universeId)
+        {
+            var results = new List<UI.BrandRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT id, universe_id, name, image_path, color_hex, created_utc FROM brands " +
+                                      "WHERE universe_id = @universeId ORDER BY name COLLATE NOCASE;";
+                AddParameter(command, "@universeId", universeId);
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) results.Add(new UI.BrandRecord { id = reader.GetString(0), universeId = reader.GetString(1),
+                        name = reader.GetString(2), imagePath = ReadNullableString(reader, 3), colorHex = reader.GetString(4), createdUtc = reader.GetString(5) });
+            }
+            return results;
+        }
+
+        public void SaveBrand(UI.BrandRecord brand)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "INSERT INTO brands(id, universe_id, name, image_path, color_hex, created_utc, updated_utc) " +
+                                      "VALUES(@id, @universeId, @name, @image, @color, @created, @updated) " +
+                                      "ON CONFLICT(id) DO UPDATE SET name=excluded.name, image_path=excluded.image_path, " +
+                                      "color_hex=excluded.color_hex, updated_utc=excluded.updated_utc;";
+                AddParameter(command, "@id", brand.id); AddParameter(command, "@universeId", brand.universeId);
+                AddParameter(command, "@name", brand.name); AddParameter(command, "@image", brand.imagePath);
+                AddParameter(command, "@color", brand.colorHex); AddParameter(command, "@created", brand.createdUtc);
+                AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+            }
+        }
+
+        public void RenameBrandAssignments(string universeId, string oldName, string newName)
+        {
+            if (string.Equals(oldName, newName, StringComparison.Ordinal)) return;
+            using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                foreach (var table in new[] { "wrestlers", "teams", "titles" })
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "UPDATE " + table + " SET brand = @newName WHERE universe_id = @universeId AND brand = @oldName;";
+                    AddParameter(command, "@newName", newName); AddParameter(command, "@oldName", oldName);
+                    AddParameter(command, "@universeId", universeId); command.ExecuteNonQuery();
+                }
+                transaction.Commit();
             }
         }
 
