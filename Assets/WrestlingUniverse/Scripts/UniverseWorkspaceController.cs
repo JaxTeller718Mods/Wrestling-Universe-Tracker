@@ -189,6 +189,12 @@ namespace WrestlingUniverse.UI
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
         private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules" };
         private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
+        private static readonly string[] TagTeamMatchFormats = {
+            "Two on Two", "Two on Two - Mixed Tag", "Two on Two - Tornado Tag", "Three on Three", "Three on Three - Tornado Tag",
+            "Four on Four", "Triple Threat Tornado Tag", "4-Way Tornado Tag", "Handicap - One on Two",
+            "Handicap - One on Two Tornado Tag", "Handicap - One on Three", "Handicap - Two on Three"
+        };
+        private static readonly string[] ExtremeRulesMatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "Two on Two" };
         private static readonly string[] MatchGenderFilters = { "Both Genders", "Male", "Female", "Neutral" };
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
@@ -789,8 +795,9 @@ namespace WrestlingUniverse.UI
             CreateRuntimeText("Arrow", memberField.transform, "▼", 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
                 new Vector2(.91f, .08f), new Vector2(.98f, .62f));
             memberField.onClick.AddListener(ToggleMemberDropdown);
-            memberDropdownMenu = CreateRuntimePanel("MemberDropdown", memberField.transform, new Color32(5, 9, 20, 255), new Vector2(0, -1.9f), new Vector2(1, 0));
-            memberDropdownMenu.SetActive(false);
+            memberDropdownMenu = CreateRuntimePanel("MemberDropdown", memberField.transform, new Color32(5, 9, 20, 255), new Vector2(0, 1f), new Vector2(1, 2.9f));
+            var memberCanvas = memberDropdownMenu.AddComponent<Canvas>(); memberCanvas.overrideSorting = true; memberCanvas.sortingOrder = 500;
+            memberDropdownMenu.AddComponent<GraphicRaycaster>(); memberDropdownMenu.SetActive(false);
 
             teamPhotoHost = CreateRuntimePanel("TeamPhoto", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .07f), new Vector2(.28f, .34f));
             var photoButton = CreateRuntimeButton("ChooseTeamPhoto", teamPhotoHost.transform, "+  CHOOSE PHOTO", new Vector2(.06f, .06f), new Vector2(.94f, .28f),
@@ -1417,7 +1424,8 @@ namespace WrestlingUniverse.UI
         private void RefreshMatchFormats()
         {
             var stipulation = matchStipulationDropdown.options[matchStipulationDropdown.value].text;
-            var formats = stipulation == "Tag Team" ? new List<string> { "Tag Team" } : new List<string>(MatchFormats);
+            var formats = stipulation == "Tag Team" ? new List<string>(TagTeamMatchFormats) :
+                stipulation == "Extreme Rules" ? new List<string>(ExtremeRulesMatchFormats) : new List<string>(MatchFormats);
             matchFormatDropdown.ClearOptions(); matchFormatDropdown.AddOptions(formats); matchFormatDropdown.value = 0; matchFormatDropdown.RefreshShownValue();
             selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
         }
@@ -1434,10 +1442,14 @@ namespace WrestlingUniverse.UI
             if (matchFormatDropdown == null || matchFormatDropdown.options.Count == 0) return 2;
             var format = matchFormatDropdown.options[matchFormatDropdown.value].text;
             if (format == "Triple Threat") return 3;
-            if (format == "Fatal 4-Way" || format == "Tag Team") return 4;
+            if (format == "Fatal 4-Way" || format == "Two on Two" || format == "Two on Two - Mixed Tag" ||
+                format == "Two on Two - Tornado Tag" || format == "Handicap - One on Three") return 4;
             if (format == "5-Way") return 5;
-            if (format == "6-Way") return 6;
-            if (format == "8-Way") return 8;
+            if (format == "6-Way" || format == "Three on Three" || format == "Three on Three - Tornado Tag" ||
+                format == "Triple Threat Tornado Tag") return 6;
+            if (format == "8-Way" || format == "Four on Four" || format == "4-Way Tornado Tag") return 8;
+            if (format == "Handicap - One on Two" || format == "Handicap - One on Two Tornado Tag") return 3;
+            if (format == "Handicap - Two on Three") return 5;
             return 2;
         }
 
@@ -1530,11 +1542,10 @@ namespace WrestlingUniverse.UI
                 var expanded = expandedBookedMatchIds.Contains(match.id); var height = expanded ? 330f : 68f; totalHeight += height + 12;
                 var card = CreateRuntimePanel("BookedMatch_" + match.id, bookedMatchCardList, new Color32(7, 12, 22, 255), Vector2.zero, Vector2.one);
                 card.AddComponent<LayoutElement>().preferredHeight = height;
-                var names = new List<string>(); foreach (var wrestler in match.participants) names.Add(wrestler.name.ToUpperInvariant());
                 var header = CreateRuntimeButton("Header", card.transform, string.Empty, new Vector2(0, expanded ? .80f : 0), Vector2.one,
                     new Color32(7, 12, 22, 255), Color.white);
                 var oldLabel = header.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
-                CreateRuntimeText("Title", header.transform, "#" + match.cardPosition + "  " + string.Join("  VS  ", names.ToArray()) + "  [" + match.format.ToUpperInvariant() + "]",
+                CreateRuntimeText("Title", header.transform, "#" + match.cardPosition + "  " + BuildMatchupLabel(match) + "  [" + match.format.ToUpperInvariant() + "]",
                     15, Color.white, TextAnchor.MiddleLeft, new Vector2(.035f, .08f), new Vector2(.90f, .92f), FontStyle.Bold);
                 CreateRuntimeText("Arrow", header.transform, expanded ? "▲" : "▼", 15, new Color32(190, 198, 210, 255), TextAnchor.MiddleCenter,
                     new Vector2(.92f, .08f), new Vector2(.98f, .92f), FontStyle.Bold);
@@ -1550,8 +1561,10 @@ namespace WrestlingUniverse.UI
                         new Vector2(left + .01f, .23f), new Vector2(right - .01f, .95f)); }
                     CreateRuntimeText("Name_" + index, body.transform, wrestler.name.ToUpperInvariant(), 12, Color.white, TextAnchor.MiddleCenter,
                         new Vector2(left, .16f), new Vector2(right, .26f), FontStyle.Bold);
-                    if (index < match.participants.Count - 1) CreateRuntimeText("Vs_" + index, body.transform, "VS", 13,
-                        new Color32(240, 190, 42, 255), TextAnchor.MiddleCenter, new Vector2(right - .025f, .45f), new Vector2(right + .025f, .58f), FontStyle.Bold);
+                    var teamSplit = MatchTeamSplitIndex(match.format);
+                    var showVs = index < match.participants.Count - 1 && (teamSplit == 0 || index + 1 == teamSplit);
+                    if (showVs) CreateRuntimeText("Vs_" + index, body.transform, "VS", 13, new Color32(240, 190, 42, 255),
+                        TextAnchor.MiddleCenter, new Vector2(right - .025f, .45f), new Vector2(right + .025f, .58f), FontStyle.Bold);
                 }
                 var edit = CreateRuntimeButton("Edit", body.transform, "EDIT", new Vector2(.03f, .025f), new Vector2(.28f, .14f),
                     new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditBookedMatch(match));
@@ -1560,6 +1573,25 @@ namespace WrestlingUniverse.UI
             }
             bookedMatchCardListLayout.preferredHeight = Mathf.Max(58, totalHeight);
             Canvas.ForceUpdateCanvases(); LayoutRebuilder.ForceRebuildLayoutImmediate(bookingAccordionContent);
+        }
+
+        private static string BuildMatchupLabel(BookedMatchRecord match)
+        {
+            var names = new List<string>(); foreach (var wrestler in match.participants) names.Add(wrestler.name.ToUpperInvariant());
+            var split = MatchTeamSplitIndex(match.format);
+            if (split <= 0 || split >= names.Count) return string.Join("  VS  ", names.ToArray());
+            return string.Join(" AND ", names.GetRange(0, split).ToArray()) + "  VS  " +
+                   string.Join(" AND ", names.GetRange(split, names.Count - split).ToArray());
+        }
+
+        private static int MatchTeamSplitIndex(string format)
+        {
+            if (format == "Two on Two" || format == "Two on Two - Mixed Tag" || format == "Two on Two - Tornado Tag" ||
+                format == "Handicap - Two on Three") return 2;
+            if (format == "Three on Three" || format == "Three on Three - Tornado Tag" || format == "Triple Threat Tornado Tag") return 3;
+            if (format == "Four on Four" || format == "4-Way Tornado Tag") return 4;
+            if (format == "Handicap - One on Two" || format == "Handicap - One on Two Tornado Tag" || format == "Handicap - One on Three") return 1;
+            return 0;
         }
 
         private void ToggleBookedMatchCard(string matchId)
