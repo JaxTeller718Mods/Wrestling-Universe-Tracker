@@ -193,7 +193,7 @@ namespace WrestlingUniverse.UI
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
-        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs", "Submission Match", "Last Man Standing", "No Holds Barred", "Iron Man Match", "Casket Match", "Ambulance Match", "Dumpster Match", "I Quit Match", "Inferno Match", "Elimination Chamber", "War Games", "Underground Match", "3 Stages of Hell" };
+        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs", "Submission Match", "Last Man Standing", "No Holds Barred", "Iron Man Match", "Casket Match", "Ambulance Match", "Dumpster Match", "I Quit Match", "Inferno Match", "Elimination Chamber", "War Games", "Underground Match", "3 Stages of Hell", "Backstage Brawl", "Gauntlet Match", "Money in the Bank" };
         private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
         private static readonly string[] TagTeamMatchFormats = {
             "Two on Two", "Two on Two - Mixed Tag", "Two on Two - Tornado Tag", "Three on Three", "Three on Three - Tornado Tag",
@@ -219,6 +219,15 @@ namespace WrestlingUniverse.UI
         private static readonly string[] OneOnOneOnlyMatchFormats = { "One on One" };
         private static readonly string[] SixWayOnlyMatchFormats = { "6-Way" };
         private static readonly string[] WarGamesMatchFormats = { "Three on Three", "Four on Four" };
+        private static readonly string[] BackstageBrawlMatchFormats = {
+            "One on One", "Triple Threat", "Fatal 4-Way", "6-Way", "Two on Two", "Handicap - One on Two"
+        };
+        private static readonly string[] GauntletMatchFormats = {
+            "4 Entrants", "5 Entrants", "6 Entrants", "8 Entrants", "10 Entrants", "20 Entrants", "30 Entrants"
+        };
+        private static readonly string[] MoneyInTheBankMatchFormats = {
+            "4-Way Ladder", "5-Way Ladder", "6 Entrants", "8-Way Ladder"
+        };
         private static readonly string[] ThreeStagesOfHellOptions = {
             "Normal", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Submission Match", "I Quit",
             "Iron Man", "Last Man Standing", "No Holds Barred", "Casket Match", "Ambulance Match", "Inferno Match",
@@ -1477,6 +1486,9 @@ namespace WrestlingUniverse.UI
                 stipulation == "Underground Match") ?
                     new List<string>(OneOnOneOnlyMatchFormats) :
                 stipulation == "3 Stages of Hell" ? new List<string>(OneOnOneOnlyMatchFormats) :
+                stipulation == "Backstage Brawl" ? new List<string>(BackstageBrawlMatchFormats) :
+                stipulation == "Gauntlet Match" ? new List<string>(GauntletMatchFormats) :
+                stipulation == "Money in the Bank" ? new List<string>(MoneyInTheBankMatchFormats) :
                 stipulation == "Elimination Chamber" ? new List<string>(SixWayOnlyMatchFormats) :
                 stipulation == "War Games" ? new List<string>(WarGamesMatchFormats) :
                 stipulation == "Extreme Rules" ?
@@ -1536,6 +1548,14 @@ namespace WrestlingUniverse.UI
             if (format == "8-Way" || format == "Four on Four" || format == "4-Way Tornado Tag") return 8;
             if (format == "Handicap - One on Two" || format == "Handicap - One on Two Tornado Tag") return 3;
             if (format == "Handicap - Two on Three") return 5;
+            if (format == "4-Way Ladder") return 4;
+            if (format == "5-Way Ladder") return 5;
+            if (format == "8-Way Ladder") return 8;
+            if (format.EndsWith(" Entrants", StringComparison.Ordinal))
+            {
+                int entrantCount;
+                if (int.TryParse(format.Substring(0, format.IndexOf(' ')), out entrantCount)) return entrantCount;
+            }
             return 2;
         }
 
