@@ -19,6 +19,7 @@ namespace WrestlingUniverse.UI
         [SerializeField] private Text sectionContentText;
         [SerializeField] private GameObject rosterView;
         [SerializeField] private GameObject wrestlerCreationPanel;
+        [SerializeField] private GameObject teamsView;
 
         private readonly Color activeNavigation = new Color32(25, 45, 65, 255);
         private readonly Color inactiveNavigation = new Color32(2, 4, 9, 255);
@@ -40,6 +41,24 @@ namespace WrestlingUniverse.UI
         private WrestlerRecord editingWrestler;
         private Text wrestlerFormTitle;
         private Text wrestlerSaveLabel;
+        private GameObject teamCreationPanel;
+        private Transform teamGrid;
+        private Text emptyTeamsText;
+        private Text teamCountText;
+        private InputField teamNameInput;
+        private Dropdown teamBrandDropdown;
+        private Dropdown teamDispositionDropdown;
+        private Text memberSelectionCaption;
+        private GameObject memberDropdownMenu;
+        private Text teamValidationText;
+        private Text teamFormTitle;
+        private Text teamSaveLabel;
+        private TeamRecord editingTeam;
+        private readonly List<string> selectedTeamMemberIds = new List<string>();
+        private List<WrestlerRecord> availableTeamMembers = new List<WrestlerRecord>();
+        private GameObject teamPhotoHost;
+        private Text teamPhotoStatus;
+        private string selectedTeamPhotoPath;
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
         private static readonly string[] Genders = { "Male", "Female", "Neutral" };
@@ -92,6 +111,14 @@ namespace WrestlingUniverse.UI
             RefreshRosterCards();
         }
 
+        public void ShowTeams()
+        {
+            SelectSection("RosterButton", "TEAMS", string.Empty);
+            sectionContentText.gameObject.SetActive(false);
+            teamsView.SetActive(true);
+            RefreshTeamCards();
+        }
+
         public void ShowBooking() => SelectSection("BookingButton", "BOOKING",
             "BOOKING CENTER\n\nShows, events, matches, and segments will be created here.");
 
@@ -109,6 +136,8 @@ namespace WrestlingUniverse.UI
             sectionContentText.gameObject.SetActive(true);
             if (rosterView != null) rosterView.SetActive(false);
             if (wrestlerCreationPanel != null) wrestlerCreationPanel.SetActive(false);
+            if (teamsView != null) teamsView.SetActive(false);
+            if (teamCreationPanel != null) teamCreationPanel.SetActive(false);
             var navigation = sectionTitleText.transform.root.Find("Background/WorkspaceNavigation");
             if (navigation == null) return;
             foreach (Transform child in navigation)
@@ -138,8 +167,80 @@ namespace WrestlingUniverse.UI
             rosterView = existingRoster != null ? existingRoster.gameObject : CreateRosterView(workspace);
             var existingCreation = workspace.Find("WrestlerCreationPanel");
             wrestlerCreationPanel = existingCreation != null ? existingCreation.gameObject : CreateWrestlerCreationPanel(workspace);
+            var existingTeams = workspace.Find("TeamsView");
+            teamsView = existingTeams != null ? existingTeams.gameObject : CreateTeamsView(workspace);
+            var existingTeamCreation = workspace.Find("TeamCreationPanel");
+            teamCreationPanel = existingTeamCreation != null ? existingTeamCreation.gameObject : CreateTeamCreationPanel(workspace);
             rosterView.SetActive(false);
             wrestlerCreationPanel.SetActive(false);
+            teamsView.SetActive(false);
+            teamCreationPanel.SetActive(false);
+        }
+
+        private GameObject CreateTeamsView(Transform workspace)
+        {
+            var view = CreateRuntimePanel("TeamsView", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("TeamsToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
+            teamCountText = CreateRuntimeText("TeamCount", toolbar.transform, "TEAMS  /  0", 17, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+            var create = CreateRuntimeButton("CreateTeamButton", toolbar.transform, "+  CREATE TEAM", new Vector2(.76f, .16f), new Vector2(.975f, .84f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255));
+            create.onClick.AddListener(ShowTeamCreation);
+            var table = CreateRuntimePanel("TeamTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
+            table.AddComponent<RectMask2D>();
+            var teamScroll = table.AddComponent<ScrollRect>();
+            teamScroll.horizontal = false; teamScroll.vertical = true;
+            teamScroll.movementType = ScrollRect.MovementType.Clamped; teamScroll.scrollSensitivity = 4f;
+            teamGrid = new GameObject("TeamCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter)).transform;
+            teamGrid.SetParent(table.transform, false);
+            var teamGridRect = teamGrid.GetComponent<RectTransform>();
+            teamGridRect.anchorMin = new Vector2(.02f, 1); teamGridRect.anchorMax = new Vector2(.98f, 1);
+            teamGridRect.pivot = new Vector2(.5f, 1); teamGridRect.anchoredPosition = new Vector2(0, -20); teamGridRect.sizeDelta = new Vector2(0, 180);
+            var grid = teamGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(330, 180); grid.spacing = new Vector2(18, 18);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 4; grid.childAlignment = TextAnchor.UpperCenter;
+            teamGrid.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            teamScroll.viewport = table.GetComponent<RectTransform>(); teamScroll.content = teamGridRect;
+            emptyTeamsText = CreateRuntimeText("EmptyTeams", table.transform, "NO TEAMS CREATED\n\nUse CREATE TEAM to assemble up to five roster members.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private GameObject CreateTeamCreationPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("TeamCreationPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
+            teamFormTitle = CreateRuntimeText("Title", panel.transform, "CREATE TEAM", 27, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .84f), new Vector2(.5f, .98f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToTeamsButton", panel.transform, "BACK TO TEAMS", new Vector2(.80f, .86f), new Vector2(.965f, .96f),
+                new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowTeams);
+            teamNameInput = CreateRuntimeInput("TeamName", panel.transform, "TEAM NAME", "Team name", new Vector2(.035f, .62f), new Vector2(.55f, .80f));
+            teamBrandDropdown = CreateRuntimeDropdown("TeamBrand", panel.transform, "BRAND", new[] { "Unassigned" }, 0, new Vector2(.58f, .62f), new Vector2(.965f, .80f));
+            teamDispositionDropdown = CreateRuntimeDropdown("TeamDisposition", panel.transform, "DISPOSITION", Dispositions, 0, new Vector2(.035f, .38f), new Vector2(.34f, .57f));
+
+            var memberField = CreateRuntimeButton("MemberSelector", panel.transform, string.Empty, new Vector2(.37f, .38f), new Vector2(.965f, .57f),
+                new Color32(5, 11, 23, 255), Color.white);
+            var defaultLabel = memberField.transform.Find("Label"); if (defaultLabel != null) Destroy(defaultLabel.gameObject);
+            CreateRuntimeText("FieldLabel", memberField.transform, "MEMBERS  (UP TO 5)", 12, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.04f, .58f), new Vector2(.96f, .94f), FontStyle.Bold);
+            memberSelectionCaption = CreateRuntimeText("Value", memberField.transform, "Select roster members", 17, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.04f, .06f), new Vector2(.9f, .62f));
+            CreateRuntimeText("Arrow", memberField.transform, "▼", 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.91f, .08f), new Vector2(.98f, .62f));
+            memberField.onClick.AddListener(ToggleMemberDropdown);
+            memberDropdownMenu = CreateRuntimePanel("MemberDropdown", memberField.transform, new Color32(5, 9, 20, 255), new Vector2(0, -1.9f), new Vector2(1, 0));
+            memberDropdownMenu.SetActive(false);
+
+            teamPhotoHost = CreateRuntimePanel("TeamPhoto", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .07f), new Vector2(.28f, .34f));
+            var photoButton = CreateRuntimeButton("ChooseTeamPhoto", teamPhotoHost.transform, "+  CHOOSE PHOTO", new Vector2(.06f, .06f), new Vector2(.94f, .28f),
+                new Color32(25, 45, 65, 255), Color.white); photoButton.onClick.AddListener(PickTeamPhoto);
+            teamPhotoStatus = CreateRuntimeText("TeamPhotoStatus", panel.transform, "No photo selected", 12, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.035f, .015f), new Vector2(.28f, .07f));
+
+            teamValidationText = CreateRuntimeText("Validation", panel.transform, string.Empty, 13, new Color32(255, 105, 105, 255), TextAnchor.MiddleLeft,
+                new Vector2(.31f, .12f), new Vector2(.72f, .25f), FontStyle.Bold);
+            var save = CreateRuntimeButton("SaveTeamButton", panel.transform, "CREATE TEAM", new Vector2(.76f, .14f), new Vector2(.965f, .32f),
+                new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255));
+            teamSaveLabel = save.transform.Find("Label").GetComponent<Text>(); save.onClick.AddListener(SaveTeam);
+            return panel;
         }
 
         private GameObject CreateRosterView(Transform workspace)
@@ -158,6 +259,7 @@ namespace WrestlingUniverse.UI
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 4f;
             var content = new GameObject("WrestlerCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
             content.transform.SetParent(viewport.transform, false);
             var contentRect = content.GetComponent<RectTransform>();
@@ -212,6 +314,132 @@ namespace WrestlingUniverse.UI
             wrestlerSaveLabel = sign.transform.Find("Label").GetComponent<Text>();
             sign.onClick.AddListener(SaveWrestler);
             return panel;
+        }
+
+        private void ShowTeamCreation()
+        {
+            SelectSection("RosterButton", "CREATE TEAM", string.Empty);
+            sectionContentText.gameObject.SetActive(false); teamCreationPanel.SetActive(true);
+            editingTeam = null; teamFormTitle.text = "CREATE TEAM"; teamSaveLabel.text = "CREATE TEAM";
+            teamNameInput.text = string.Empty; teamBrandDropdown.value = 0; teamDispositionDropdown.value = 0;
+            teamBrandDropdown.RefreshShownValue(); teamDispositionDropdown.RefreshShownValue();
+            selectedTeamMemberIds.Clear(); teamValidationText.text = string.Empty; BuildMemberDropdown();
+            selectedTeamPhotoPath = string.Empty; teamPhotoStatus.text = "No photo selected";
+            var oldPreview = teamPhotoHost.transform.Find("PhotoPreview"); if (oldPreview != null) Destroy(oldPreview.gameObject);
+        }
+
+        private void EditTeam(TeamRecord team)
+        {
+            ShowTeamCreation(); editingTeam = team; teamFormTitle.text = "EDIT TEAM"; teamSaveLabel.text = "SAVE CHANGES";
+            teamNameInput.text = team.name; SetDropdownValue(teamBrandDropdown, team.brand); SetDropdownValue(teamDispositionDropdown, team.disposition);
+            selectedTeamMemberIds.Clear(); selectedTeamMemberIds.AddRange(team.memberIds); BuildMemberDropdown();
+            selectedTeamPhotoPath = string.Empty;
+            teamPhotoStatus.text = string.IsNullOrEmpty(team.photoPath) ? "No photo selected" : System.IO.Path.GetFileName(team.photoPath);
+            var oldPreview = teamPhotoHost.transform.Find("PhotoPreview"); if (oldPreview != null) Destroy(oldPreview.gameObject);
+            var texture = UniverseImageStorage.LoadTexture(team.photoPath);
+            if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(teamPhotoHost.transform, "PhotoPreview", texture, new Vector2(.06f, .31f), new Vector2(.94f, .94f)); }
+        }
+
+        private void PickTeamPhoto()
+        {
+            string path; if (!WindowsImageFilePicker.TryPickImage(out path)) return;
+            var texture = UniverseImageStorage.LoadTexture(path);
+            if (texture == null) { teamValidationText.text = "Unity could not decode that image."; return; }
+            loadedTextures.Add(texture); selectedTeamPhotoPath = path; teamPhotoStatus.text = System.IO.Path.GetFileName(path);
+            SetRuntimePhoto(teamPhotoHost.transform, "PhotoPreview", texture, new Vector2(.06f, .31f), new Vector2(.94f, .94f));
+        }
+
+        private void ToggleMemberDropdown()
+        {
+            memberDropdownMenu.SetActive(!memberDropdownMenu.activeSelf);
+            if (memberDropdownMenu.activeSelf) memberDropdownMenu.transform.SetAsLastSibling();
+        }
+
+        private void BuildMemberDropdown()
+        {
+            availableTeamMembers = repository.LoadWrestlers(ActiveUniverseSession.UniverseId);
+            for (var index = memberDropdownMenu.transform.childCount - 1; index >= 0; index--) Destroy(memberDropdownMenu.transform.GetChild(index).gameObject);
+            var count = Mathf.Max(1, availableTeamMembers.Count);
+            var rowHeight = 1f / count;
+            for (var index = 0; index < availableTeamMembers.Count; index++)
+            {
+                var wrestler = availableTeamMembers[index];
+                var top = 1f - index * rowHeight; var bottom = top - rowHeight;
+                var selected = selectedTeamMemberIds.Contains(wrestler.id);
+                var row = CreateRuntimeButton("Member_" + wrestler.id, memberDropdownMenu.transform,
+                    (selected ? "✓  " : "     ") + wrestler.name, new Vector2(.02f, bottom), new Vector2(.98f, top),
+                    selected ? new Color32(25, 65, 82, 255) : new Color32(9, 15, 29, 255), Color.white);
+                row.onClick.AddListener(() => ToggleTeamMember(wrestler.id));
+            }
+            if (availableTeamMembers.Count == 0)
+                CreateRuntimeText("NoMembers", memberDropdownMenu.transform, "No wrestlers available", 14, new Color32(142, 160, 181, 255),
+                    TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            UpdateMemberCaption();
+        }
+
+        private void ToggleTeamMember(string wrestlerId)
+        {
+            if (selectedTeamMemberIds.Contains(wrestlerId)) selectedTeamMemberIds.Remove(wrestlerId);
+            else if (selectedTeamMemberIds.Count < 5) selectedTeamMemberIds.Add(wrestlerId);
+            else { teamValidationText.text = "A team can have no more than five members."; return; }
+            BuildMemberDropdown(); memberDropdownMenu.SetActive(true);
+        }
+
+        private void UpdateMemberCaption()
+        {
+            var names = new List<string>();
+            foreach (var id in selectedTeamMemberIds)
+            {
+                var wrestler = availableTeamMembers.Find(item => item.id == id);
+                if (wrestler != null) names.Add(wrestler.name);
+            }
+            memberSelectionCaption.text = names.Count == 0 ? "Select roster members" : string.Join(", ", names.ToArray());
+        }
+
+        private void SaveTeam()
+        {
+            if (string.IsNullOrWhiteSpace(teamNameInput.text)) { teamValidationText.text = "Team name is required."; return; }
+            if (selectedTeamMemberIds.Count == 0) { teamValidationText.text = "Select at least one team member."; return; }
+            try
+            {
+                var team = new TeamRecord
+                {
+                    id = editingTeam == null ? Guid.NewGuid().ToString("N") : editingTeam.id,
+                    universeId = ActiveUniverseSession.UniverseId, name = teamNameInput.text.Trim(),
+                    brand = teamBrandDropdown.options[teamBrandDropdown.value].text,
+                    disposition = teamDispositionDropdown.options[teamDispositionDropdown.value].text,
+                    createdUtc = editingTeam == null ? DateTime.UtcNow.ToString("O") : editingTeam.createdUtc,
+                    memberIds = new List<string>(selectedTeamMemberIds),
+                    photoPath = editingTeam == null ? string.Empty : editingTeam.photoPath
+                };
+                if (!string.IsNullOrEmpty(selectedTeamPhotoPath))
+                    team.photoPath = UniverseImageStorage.Import(team.universeId, selectedTeamPhotoPath, "team_" + team.id);
+                repository.SaveTeam(team); memberDropdownMenu.SetActive(false); ShowTeams();
+            }
+            catch (Exception exception) { Debug.LogException(exception); teamValidationText.text = "The team could not be saved. Check the Console."; }
+        }
+
+        private void RefreshTeamCards()
+        {
+            if (repository == null || teamGrid == null) return;
+            for (var index = teamGrid.childCount - 1; index >= 0; index--) Destroy(teamGrid.GetChild(index).gameObject);
+            var teams = repository.LoadTeams(ActiveUniverseSession.UniverseId);
+            teamCountText.text = "TEAMS  /  " + teams.Count; emptyTeamsText.gameObject.SetActive(teams.Count == 0);
+            foreach (var team in teams)
+            {
+                var card = CreateRuntimePanel("Team_" + team.id, teamGrid, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
+                var texture = UniverseImageStorage.LoadTexture(team.photoPath);
+                if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "TeamPhoto", texture, new Vector2(.04f, .32f), new Vector2(.34f, .94f)); }
+                var textMin = texture != null ? .38f : .06f;
+                CreateRuntimeText("Name", card.transform, team.name.ToUpperInvariant(), 20, Color.white, TextAnchor.MiddleLeft,
+                    new Vector2(textMin, .65f), new Vector2(.94f, .92f), FontStyle.Bold);
+                CreateRuntimeText("Members", card.transform, string.Join("  /  ", team.memberNames.ToArray()), 14, new Color32(142, 160, 181, 255),
+                    TextAnchor.MiddleLeft, new Vector2(textMin, .31f), new Vector2(.94f, .65f));
+                CreateRuntimeText("Disposition", card.transform, team.disposition.ToUpperInvariant(), 12, new Color32(45, 190, 230, 255),
+                    TextAnchor.MiddleLeft, new Vector2(textMin, .20f), new Vector2(.94f, .32f), FontStyle.Bold);
+                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .035f), new Vector2(.94f, .18f),
+                    new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditTeam(team));
+            }
         }
 
         private void ResetWrestlerForm()
@@ -478,7 +706,12 @@ namespace WrestlingUniverse.UI
                 var placeholder = background.Find("FeatureWorkspace/Placeholder");
                 if (placeholder != null) sectionContentText = placeholder.GetComponent<Text>();
             }
-            if (background.Find("WorkspaceNavigation") != null) return;
+            var existingNavigation = background.Find("WorkspaceNavigation");
+            if (existingNavigation != null)
+            {
+                EnsureRosterDropdown(existingNavigation);
+                return;
+            }
 
             var title = background.Find("Title");
             var owner = background.Find("Owner");
@@ -499,6 +732,29 @@ namespace WrestlingUniverse.UI
             CreateRuntimeNavigationButton(bar.transform, "BookingButton", "BOOKING", .43f, .55f, ShowBooking);
             CreateRuntimeNavigationButton(bar.transform, "ResultsButton", "RESULTS", .55f, .67f, ShowResults);
             CreateRuntimeNavigationButton(bar.transform, "AnalyticsButton", "ANALYTICS", .67f, .80f, ShowAnalytics);
+            EnsureRosterDropdown(bar.transform);
+        }
+
+        private void EnsureRosterDropdown(Transform navigation)
+        {
+            navigation.SetAsLastSibling();
+            var rosterButton = navigation.Find("RosterButton");
+            if (rosterButton == null || rosterButton.Find("RosterDropdown") != null) return;
+
+            var menu = CreateRuntimePanel("RosterDropdown", rosterButton, new Color32(5, 9, 20, 255),
+                new Vector2(0, -1.55f), new Vector2(1, 0));
+            menu.transform.SetAsLastSibling();
+            var rosterItem = CreateRuntimeButton("RosterMenuItem", menu.transform, "ROSTER",
+                new Vector2(0, .52f), new Vector2(1, .96f), new Color32(9, 15, 29, 255), Color.white);
+            rosterItem.onClick.AddListener(ShowRoster);
+            var teamsItem = CreateRuntimeButton("TeamsMenuItem", menu.transform, "TEAMS",
+                new Vector2(0, .04f), new Vector2(1, .48f), new Color32(9, 15, 29, 255), Color.white);
+            teamsItem.onClick.AddListener(ShowTeams);
+
+            var hover = rosterButton.gameObject.AddComponent<NavigationHoverDropdown>();
+            hover.Configure(menu);
+            rosterButton.gameObject.AddComponent<NavigationHoverRelay>().Configure(hover);
+            menu.AddComponent<NavigationHoverRelay>().Configure(hover);
         }
 
         private static void CreateRuntimeNavigationButton(Transform parent, string name, string labelText,

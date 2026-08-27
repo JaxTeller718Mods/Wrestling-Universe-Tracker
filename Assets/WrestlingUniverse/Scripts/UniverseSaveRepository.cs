@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 2;
+        private const int CurrentSchemaVersion = 4;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -44,6 +44,16 @@ namespace WrestlingUniverse.Persistence
                     "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
                 Execute(connection, transaction,
                     "CREATE INDEX IF NOT EXISTS idx_wrestlers_universe ON wrestlers(universe_id, name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS teams (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, " +
+                    "name TEXT NOT NULL, brand TEXT NOT NULL, disposition TEXT NOT NULL, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                EnsureColumn(connection, transaction, "teams", "photo_path", "TEXT");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS team_members (team_id TEXT NOT NULL, wrestler_id TEXT NOT NULL, position INTEGER NOT NULL, " +
+                    "PRIMARY KEY(team_id, wrestler_id), FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(wrestler_id) REFERENCES wrestlers(id) ON DELETE CASCADE);");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_teams_universe ON teams(universe_id, name);");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -195,6 +205,72 @@ namespace WrestlingUniverse.Persistence
             }
         }
 
+        public List<UI.TeamRecord> LoadTeams(string universeId)
+        {
+            var results = new List<UI.TeamRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT id, universe_id, name, brand, disposition, created_utc, photo_path FROM teams " +
+                                      "WHERE universe_id = @universeId ORDER BY name COLLATE NOCASE;";
+                AddParameter(command, "@universeId", universeId);
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) results.Add(new UI.TeamRecord { id = reader.GetString(0), universeId = reader.GetString(1),
+                        name = reader.GetString(2), brand = reader.GetString(3), disposition = reader.GetString(4), createdUtc = reader.GetString(5),
+                        photoPath = ReadNullableString(reader, 6) });
+            }
+
+            foreach (var team in results)
+            {
+                using (var connection = OpenConnection())
+                using (var command = CreateCommand(connection))
+                {
+                    command.CommandText = "SELECT w.id, w.name FROM team_members tm JOIN wrestlers w ON w.id = tm.wrestler_id " +
+                                          "WHERE tm.team_id = @teamId ORDER BY tm.position;";
+                    AddParameter(command, "@teamId", team.id);
+                    using (var reader = command.ExecuteReader())
+                        while (reader.Read()) { team.memberIds.Add(reader.GetString(0)); team.memberNames.Add(reader.GetString(1)); }
+                }
+            }
+            return results;
+        }
+
+        public void SaveTeam(UI.TeamRecord team)
+        {
+            if (team.memberIds.Count > 5) throw new InvalidOperationException("A team cannot have more than five members.");
+            using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT OR REPLACE INTO teams(id, universe_id, name, brand, disposition, photo_path, created_utc, updated_utc) " +
+                                          "VALUES(@id, @universeId, @name, @brand, @disposition, @photo, @created, @updated);";
+                    AddParameter(command, "@id", team.id); AddParameter(command, "@universeId", team.universeId);
+                    AddParameter(command, "@name", team.name); AddParameter(command, "@brand", team.brand);
+                    AddParameter(command, "@disposition", team.disposition); AddParameter(command, "@photo", team.photoPath);
+                    AddParameter(command, "@created", team.createdUtc);
+                    AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+                }
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction; command.CommandText = "DELETE FROM team_members WHERE team_id = @teamId;";
+                    AddParameter(command, "@teamId", team.id); command.ExecuteNonQuery();
+                }
+                for (var index = 0; index < team.memberIds.Count; index++)
+                {
+                    using (var command = CreateCommand(connection))
+                    {
+                        command.Transaction = transaction;
+                        command.CommandText = "INSERT INTO team_members(team_id, wrestler_id, position) VALUES(@teamId, @wrestlerId, @position);";
+                        AddParameter(command, "@teamId", team.id); AddParameter(command, "@wrestlerId", team.memberIds[index]);
+                        AddParameter(command, "@position", index); command.ExecuteNonQuery();
+                    }
+                }
+                transaction.Commit();
+            }
+        }
+
         private SqliteConnection OpenConnection()
         {
             var connection = new SqliteConnection(connectionString);
@@ -215,6 +291,19 @@ namespace WrestlingUniverse.Persistence
                 command.CommandText = sql;
                 command.ExecuteNonQuery();
             }
+        }
+
+        private static void EnsureColumn(IDbConnection connection, IDbTransaction transaction, string table, string column, string definition)
+        {
+            var exists = false;
+            using (var command = CreateCommand(connection))
+            {
+                command.Transaction = transaction;
+                command.CommandText = "PRAGMA table_info(" + table + ");";
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase)) exists = true;
+            }
+            if (!exists) Execute(connection, transaction, "ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition + ";");
         }
 
         private static IDbCommand CreateCommand(IDbConnection connection)

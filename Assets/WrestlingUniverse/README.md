@@ -21,3 +21,9 @@ The workspace navigation bar contains **My Universe**, **Roster**, **Booking**, 
 The **Roster** section contains a toolbar, signed-talent count, and a five-column portrait-card grid. **Sign Wrestler** captures name, future Brand assignment, disposition, gender, tier, OVR, and an optional photo. Wrestlers are stored in SQLite against the active universe ID and reload as portrait cards.
 
 Each wrestler portrait card includes **Edit**. It reopens the wrestler form with all saved fields and the managed photo preloaded, then updates the same SQLite record.
+
+Hovering **Roster** in the workspace navigation opens a submenu containing **Roster** and **Teams**. The main button and Roster submenu item open signed talent; Teams opens its own blank feature workspace.
+
+Teams are persisted per universe with a name, future Brand assignment, disposition, and one to five roster-member references. The custom member dropdown supports multiple selections with a five-member cap, and each team card can reopen the form for editing.
+
+Teams also support an optional managed photo. It is copied into the universe image directory, persisted in SQLite through schema version 4, shown on team cards, and retained or replaced during editing.
