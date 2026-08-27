@@ -193,7 +193,7 @@ namespace WrestlingUniverse.UI
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
-        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs", "Submission Match", "Last Man Standing", "No Holds Barred", "Iron Man Match", "Casket Match", "Ambulance Match", "Dumpster Match", "I Quit Match", "Inferno Match", "Elimination Chamber", "War Games", "Underground Match", "3 Stages of Hell", "Backstage Brawl", "Gauntlet Match", "Money in the Bank" };
+        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs", "Submission Match", "Last Man Standing", "No Holds Barred", "Iron Man Match", "Casket Match", "Ambulance Match", "Dumpster Match", "I Quit Match", "Inferno Match", "Elimination Chamber", "War Games", "Underground Match", "3 Stages of Hell", "Backstage Brawl", "Gauntlet Match", "Money in the Bank", "Battle Royal", "Royal Rumble" };
         private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
         private static readonly string[] TagTeamMatchFormats = {
             "Two on Two", "Two on Two - Mixed Tag", "Two on Two - Tornado Tag", "Three on Three", "Three on Three - Tornado Tag",
@@ -228,6 +228,8 @@ namespace WrestlingUniverse.UI
         private static readonly string[] MoneyInTheBankMatchFormats = {
             "4-Way Ladder", "5-Way Ladder", "6 Entrants", "8-Way Ladder"
         };
+        private static readonly string[] BattleRoyalMatchFormats = { "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
+        private static readonly string[] RoyalRumbleMatchFormats = { "10 Entrants", "20 Entrants", "30 Entrants" };
         private static readonly string[] ThreeStagesOfHellOptions = {
             "Normal", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Submission Match", "I Quit",
             "Iron Man", "Last Man Standing", "No Holds Barred", "Casket Match", "Ambulance Match", "Inferno Match",
@@ -1489,6 +1491,8 @@ namespace WrestlingUniverse.UI
                 stipulation == "Backstage Brawl" ? new List<string>(BackstageBrawlMatchFormats) :
                 stipulation == "Gauntlet Match" ? new List<string>(GauntletMatchFormats) :
                 stipulation == "Money in the Bank" ? new List<string>(MoneyInTheBankMatchFormats) :
+                stipulation == "Battle Royal" ? new List<string>(BattleRoyalMatchFormats) :
+                stipulation == "Royal Rumble" ? new List<string>(RoyalRumbleMatchFormats) :
                 stipulation == "Elimination Chamber" ? new List<string>(SixWayOnlyMatchFormats) :
                 stipulation == "War Games" ? new List<string>(WarGamesMatchFormats) :
                 stipulation == "Extreme Rules" ?
