@@ -70,8 +70,9 @@ namespace WrestlingUniverse.Editor
 
             Text("SectionTitle", background.transform, "MY UNIVERSES", 20, Cyan, TextAnchor.MiddleLeft, new Vector2(.04f, .465f), new Vector2(.5f, .53f), FontStyle.Bold);
             var createTop = Button("CreateUniverseTop", background.transform, "+  CREATE UNIVERSE", new Vector2(.73f, .455f), new Vector2(.96f, .525f), Gold, Bg);
+            var exitApp = Button("ExitApplicationButton", background.transform, "EXIT APP", new Vector2(.73f, .395f), new Vector2(.96f, .445f), new Color32(44, 57, 74, 255), White);
             var list = NewUI("UniverseList", background.transform, typeof(RectTransform), typeof(HorizontalLayoutGroup));
-            Rect(list, new Vector2(.04f, .07f), new Vector2(.96f, .45f));
+            Rect(list, new Vector2(.04f, .07f), new Vector2(.96f, .385f));
             var layout = list.GetComponent<HorizontalLayoutGroup>();
             layout.spacing = 24;
             layout.childControlWidth = true;
@@ -98,6 +99,7 @@ namespace WrestlingUniverse.Editor
             Set(controller, "startDateInput", date); Set(controller, "validationText", validation);
             Set(controller, "ownerImageStatus", ownerImage); Set(controller, "promotionImageStatus", promotionImage);
             UnityEventTools.AddPersistentListener(createTop.onClick, controller.OpenCreateUniverse);
+            UnityEventTools.AddPersistentListener(exitApp.onClick, controller.ExitApplication);
             UnityEventTools.AddPersistentListener(cancel.onClick, controller.CloseCreateUniverse);
             UnityEventTools.AddPersistentListener(submit.onClick, controller.CreateUniverse);
             UnityEventTools.AddPersistentListener(ownerImageButton.onClick, controller.UseOwnerImagePlaceholder);

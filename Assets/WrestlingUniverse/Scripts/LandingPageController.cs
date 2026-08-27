@@ -36,10 +36,45 @@ namespace WrestlingUniverse.UI
 
         private void Awake()
         {
+            EnsureExitButton();
             modalOverlay.SetActive(false);
             universeCardTemplate.SetActive(false);
             LoadSavedUniverses();
             RefreshSummary();
+        }
+
+        public void ExitApplication()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        private void EnsureExitButton()
+        {
+            var root = universeCountText != null ? universeCountText.transform.root : transform.root;
+            var background = root.Find("Background");
+            if (background == null || background.Find("ExitApplicationButton") != null) return;
+            var create = background.Find("CreateUniverseTop");
+            if (create == null) return;
+
+            var exitObject = Instantiate(create.gameObject, background);
+            exitObject.name = "ExitApplicationButton";
+            var rect = exitObject.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(.73f, .395f); rect.anchorMax = new Vector2(.96f, .445f);
+            rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
+            var image = exitObject.GetComponent<Image>(); if (image != null) image.color = new Color32(44, 57, 74, 255);
+            var label = exitObject.transform.Find("Label"); if (label != null) label.GetComponent<Text>().text = "EXIT APP";
+            var button = exitObject.GetComponent<Button>(); button.onClick.RemoveAllListeners(); button.onClick.AddListener(ExitApplication);
+
+            var list = background.Find("UniverseList");
+            if (list != null)
+            {
+                var listRect = list.GetComponent<RectTransform>();
+                listRect.anchorMax = new Vector2(.96f, .385f); listRect.offsetMax = Vector2.zero;
+            }
         }
 
         public void OpenCreateUniverse()

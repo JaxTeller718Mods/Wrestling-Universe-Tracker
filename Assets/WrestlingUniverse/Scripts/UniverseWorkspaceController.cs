@@ -619,9 +619,9 @@ namespace WrestlingUniverse.UI
             teamGrid.SetParent(table.transform, false);
             var teamGridRect = teamGrid.GetComponent<RectTransform>();
             teamGridRect.anchorMin = new Vector2(.02f, 1); teamGridRect.anchorMax = new Vector2(.98f, 1);
-            teamGridRect.pivot = new Vector2(.5f, 1); teamGridRect.anchoredPosition = new Vector2(0, -20); teamGridRect.sizeDelta = new Vector2(0, 180);
-            var grid = teamGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(330, 180); grid.spacing = new Vector2(18, 18);
-            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 4; grid.childAlignment = TextAnchor.UpperCenter;
+            teamGridRect.pivot = new Vector2(.5f, 1); teamGridRect.anchoredPosition = new Vector2(0, -20); teamGridRect.sizeDelta = new Vector2(0, 360);
+            var grid = teamGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(470, 360); grid.spacing = new Vector2(22, 22);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 3; grid.childAlignment = TextAnchor.UpperCenter;
             teamGrid.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             teamScroll.viewport = table.GetComponent<RectTransform>(); teamScroll.content = teamGridRect;
             emptyTeamsText = CreateRuntimeText("EmptyTeams", table.transform, "NO TEAMS CREATED\n\nUse CREATE TEAM to assemble up to five roster members.", 20,
@@ -754,12 +754,12 @@ namespace WrestlingUniverse.UI
             contentRect.anchorMax = new Vector2(.98f, 1);
             contentRect.pivot = new Vector2(.5f, 1);
             contentRect.anchoredPosition = new Vector2(0, -20);
-            contentRect.sizeDelta = new Vector2(0, 180);
+            contentRect.sizeDelta = new Vector2(0, 390);
             var grid = content.GetComponent<GridLayoutGroup>();
-            grid.cellSize = new Vector2(230, 230);
-            grid.spacing = new Vector2(18, 18);
+            grid.cellSize = new Vector2(340, 390);
+            grid.spacing = new Vector2(22, 22);
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = 5;
+            grid.constraintCount = 4;
             grid.childAlignment = TextAnchor.UpperCenter;
             content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             scroll.viewport = viewport.GetComponent<RectTransform>();
@@ -916,15 +916,15 @@ namespace WrestlingUniverse.UI
             {
                 var card = CreateRuntimePanel("Team_" + team.id, teamGrid, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
                 var texture = UniverseImageStorage.LoadTexture(team.photoPath);
-                if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "TeamPhoto", texture, new Vector2(.04f, .32f), new Vector2(.34f, .94f)); }
-                var textMin = texture != null ? .38f : .06f;
+                if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "TeamPhoto", texture, new Vector2(.04f, .43f), new Vector2(.96f, .97f)); }
+                var textMin = .06f;
                 CreateRuntimeText("Name", card.transform, team.name.ToUpperInvariant(), 20, Color.white, TextAnchor.MiddleLeft,
-                    new Vector2(textMin, .65f), new Vector2(.94f, .92f), FontStyle.Bold);
+                    new Vector2(textMin, .31f), new Vector2(.94f, .43f), FontStyle.Bold);
                 CreateRuntimeText("Members", card.transform, string.Join("  /  ", team.memberNames.ToArray()), 14, new Color32(142, 160, 181, 255),
-                    TextAnchor.MiddleLeft, new Vector2(textMin, .31f), new Vector2(.94f, .65f));
+                    TextAnchor.MiddleLeft, new Vector2(textMin, .20f), new Vector2(.94f, .31f));
                 CreateRuntimeText("Disposition", card.transform, team.disposition.ToUpperInvariant(), 12, new Color32(45, 190, 230, 255),
-                    TextAnchor.MiddleLeft, new Vector2(textMin, .20f), new Vector2(.94f, .32f), FontStyle.Bold);
-                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .035f), new Vector2(.94f, .18f),
+                    TextAnchor.MiddleLeft, new Vector2(textMin, .13f), new Vector2(.94f, .20f), FontStyle.Bold);
+                var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .025f), new Vector2(.94f, .12f),
                     new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditTeam(team));
             }
         }
@@ -1534,14 +1534,14 @@ namespace WrestlingUniverse.UI
             if (texture != null)
             {
                 loadedTextures.Add(texture);
-                SetRuntimePhoto(card.transform, "Portrait", texture, new Vector2(.05f, .38f), new Vector2(.95f, .96f));
+                SetRuntimePhoto(card.transform, "Portrait", texture, new Vector2(.04f, .34f), new Vector2(.96f, .97f));
             }
             CreateRuntimeText("Name", card.transform, wrestler.name.ToUpperInvariant(), 16, Color.white, TextAnchor.MiddleLeft,
-                new Vector2(.06f, .24f), new Vector2(.72f, .38f), FontStyle.Bold);
+                new Vector2(.06f, .22f), new Vector2(.72f, .34f), FontStyle.Bold);
             CreateRuntimeText("Overall", card.transform, wrestler.overall.ToString(), 22, new Color32(240, 190, 42, 255), TextAnchor.MiddleRight,
-                new Vector2(.72f, .24f), new Vector2(.94f, .38f), FontStyle.Bold);
+                new Vector2(.72f, .22f), new Vector2(.94f, .34f), FontStyle.Bold);
             CreateRuntimeText("Details", card.transform, wrestler.disposition.ToUpperInvariant() + "  /  " + wrestler.tier.ToUpperInvariant(), 11,
-                new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.06f, .14f), new Vector2(.94f, .24f));
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.06f, .13f), new Vector2(.94f, .22f));
             var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .025f), new Vector2(.94f, .13f),
                 new Color32(25, 45, 65, 255), Color.white);
             edit.onClick.AddListener(() => EditWrestler(wrestler));
