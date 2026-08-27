@@ -60,11 +60,11 @@ namespace WrestlingUniverse.Editor
             var results = NavigationButton("ResultsButton", navigation.transform, "RESULTS", .55f, .67f);
             var analytics = NavigationButton("AnalyticsButton", navigation.transform, "ANALYTICS", .67f, .80f);
 
-            var section = Text("Section", background.transform, "UNIVERSE DASHBOARD", 16, new Color32(45, 190, 230, 255), TextAnchor.LowerLeft, new Vector2(.04f, .68f), new Vector2(.6f, .76f), FontStyle.Bold);
-            Text("Title", background.transform, "WELCOME TO YOUR UNIVERSE", 48, Color.white, TextAnchor.MiddleLeft, new Vector2(.04f, .55f), new Vector2(.85f, .68f), FontStyle.Bold);
-            var owner = Text("Owner", background.transform, "OWNER  /", 18, new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.04f, .47f), new Vector2(.46f, .55f));
-            var startDate = Text("StartDate", background.transform, "UNIVERSE START  /", 18, new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.48f, .47f), new Vector2(.9f, .55f));
-            var content = Image("FeatureWorkspace", background.transform, new Color32(9, 15, 29, 255), new Vector2(.04f, .07f), new Vector2(.96f, .43f));
+            var section = Text("Section", background.transform, "UNIVERSE DASHBOARD", 16, new Color32(45, 190, 230, 255), TextAnchor.LowerLeft, new Vector2(.04f, .735f), new Vector2(.6f, .785f), FontStyle.Bold);
+            Text("Title", background.transform, "WELCOME TO YOUR UNIVERSE", 36, Color.white, TextAnchor.MiddleLeft, new Vector2(.04f, .665f), new Vector2(.85f, .735f), FontStyle.Bold);
+            var owner = Text("Owner", background.transform, "OWNER  /", 18, new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.04f, .605f), new Vector2(.46f, .665f));
+            var startDate = Text("StartDate", background.transform, "UNIVERSE START  /", 18, new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.48f, .605f), new Vector2(.9f, .665f));
+            var content = Image("FeatureWorkspace", background.transform, new Color32(9, 15, 29, 255), new Vector2(.04f, .055f), new Vector2(.96f, .585f));
             var placeholder = Text("Placeholder", content.transform, "YOUR UNIVERSE FEATURES WILL LIVE HERE\n\nRoster  /  Shows  /  Championships  /  Teams  /  Stables  /  Match History", 22, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.05f, .1f), new Vector2(.95f, .9f), FontStyle.Bold);
 
             var controllerObject = new GameObject("UniverseWorkspaceController");
