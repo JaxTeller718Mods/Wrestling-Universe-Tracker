@@ -176,6 +176,13 @@ namespace WrestlingUniverse.UI
         private readonly List<string> selectedMatchParticipantIds = new List<string>();
         private List<WrestlerRecord> availableMatchParticipants = new List<WrestlerRecord>();
         private List<string> activeBookingBrandNames = new List<string>();
+        private Button addMatchToCardButton;
+        private Text addMatchToCardLabel;
+        private Text matchBookingValidationText;
+        private Transform bookedMatchCardList;
+        private LayoutElement bookedMatchCardListLayout;
+        private BookedMatchRecord editingBookedMatch;
+        private readonly HashSet<string> expandedBookedMatchIds = new HashSet<string>();
         private static readonly string[] ShowFrequencies = { "Weekly", "Bi-Weekly", "Monthly", "Special" };
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
@@ -654,17 +661,17 @@ namespace WrestlingUniverse.UI
             matchBookingHeader.AddComponent<LayoutElement>().preferredHeight = 72;
             matchBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleMatchBooking);
             matchBookingBody = CreateRuntimePanel("MatchBookingBody", bookingAccordionContent, new Color32(8, 15, 27, 255), Vector2.zero, Vector2.one);
-            matchBookingBody.AddComponent<LayoutElement>().preferredHeight = 390;
+            matchBookingBody.AddComponent<LayoutElement>().preferredHeight = 500;
             matchStipulationDropdown = CreateRuntimeDropdown("MatchStipulation", matchBookingBody.transform, "STIPULATION", MatchStipulations, 0,
-                new Vector2(.035f, .72f), new Vector2(.485f, .96f));
+                new Vector2(.035f, .76f), new Vector2(.485f, .96f));
             matchFormatDropdown = CreateRuntimeDropdown("MatchFormat", matchBookingBody.transform, "FORMAT", MatchFormats, 0,
-                new Vector2(.515f, .72f), new Vector2(.965f, .96f));
+                new Vector2(.515f, .76f), new Vector2(.965f, .96f));
             matchTitleDropdown = CreateRuntimeDropdown("MatchTitle", matchBookingBody.transform, "TITLE ON THE LINE", new[] { "None" }, 0,
-                new Vector2(.035f, .43f), new Vector2(.61f, .65f));
+                new Vector2(.035f, .52f), new Vector2(.61f, .71f));
             matchGenderDropdown = CreateRuntimeDropdown("MatchGender", matchBookingBody.transform, "GENDER FILTER", MatchGenderFilters, 0,
-                new Vector2(.64f, .43f), new Vector2(.965f, .65f));
+                new Vector2(.64f, .52f), new Vector2(.965f, .71f));
             var participantSelector = CreateRuntimeButton("MatchParticipantSelector", matchBookingBody.transform, string.Empty,
-                new Vector2(.035f, .08f), new Vector2(.965f, .34f), new Color32(5, 11, 23, 255), Color.white);
+                new Vector2(.035f, .23f), new Vector2(.965f, .45f), new Color32(5, 11, 23, 255), Color.white);
             var participantLabel = participantSelector.transform.Find("Label"); if (participantLabel != null) Destroy(participantLabel.gameObject);
             CreateRuntimeText("FieldLabel", participantSelector.transform, "PARTICIPANTS", 12, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
                 new Vector2(.035f, .58f), new Vector2(.96f, .94f), FontStyle.Bold);
@@ -673,7 +680,15 @@ namespace WrestlingUniverse.UI
             CreateRuntimeText("Arrow", participantSelector.transform, "▼", 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
                 new Vector2(.92f, .08f), new Vector2(.98f, .62f)); participantSelector.onClick.AddListener(ToggleMatchParticipantMenu);
             matchParticipantMenu = CreateRuntimePanel("MatchParticipantDropdown", participantSelector.transform, new Color32(5, 9, 20, 255),
-                new Vector2(0, -2.2f), new Vector2(1, 0)); matchParticipantMenu.SetActive(false);
+                new Vector2(0, 1f), new Vector2(1, 3.2f));
+            var participantCanvas = matchParticipantMenu.AddComponent<Canvas>(); participantCanvas.overrideSorting = true; participantCanvas.sortingOrder = 500;
+            matchParticipantMenu.AddComponent<GraphicRaycaster>(); matchParticipantMenu.SetActive(false);
+            matchBookingValidationText = CreateRuntimeText("MatchValidation", matchBookingBody.transform, string.Empty, 12, new Color32(255, 105, 105, 255),
+                TextAnchor.MiddleLeft, new Vector2(.035f, .15f), new Vector2(.72f, .22f), FontStyle.Bold);
+            addMatchToCardButton = CreateRuntimeButton("AddMatchToCard", matchBookingBody.transform, "+  ADD TO CARD",
+                new Vector2(.035f, .025f), new Vector2(.965f, .14f), new Color32(25, 45, 65, 255), Color.white);
+            addMatchToCardLabel = addMatchToCardButton.transform.Find("Label").GetComponent<Text>();
+            addMatchToCardButton.onClick.AddListener(AddMatchToCard);
             matchStipulationDropdown.onValueChanged.AddListener(_ => RefreshMatchFormats());
             matchFormatDropdown.onValueChanged.AddListener(_ => HandleMatchFormatChanged());
             matchGenderDropdown.onValueChanged.AddListener(_ => RefreshMatchParticipants());
@@ -683,6 +698,11 @@ namespace WrestlingUniverse.UI
             segmentBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleSegmentBooking);
             segmentBookingBody = CreateRuntimePanel("SegmentBookingBody", bookingAccordionContent, new Color32(12, 10, 25, 255), Vector2.zero, Vector2.one);
             segmentBookingBody.AddComponent<LayoutElement>().preferredHeight = 300;
+            var matchListObject = new GameObject("BookedMatchCardList", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+            matchListObject.transform.SetParent(bookingAccordionContent, false); bookedMatchCardList = matchListObject.transform;
+            var matchListLayout = matchListObject.GetComponent<VerticalLayoutGroup>(); matchListLayout.spacing = 12;
+            matchListLayout.childControlWidth = true; matchListLayout.childControlHeight = true; matchListLayout.childForceExpandWidth = true; matchListLayout.childForceExpandHeight = false;
+            bookedMatchCardListLayout = matchListObject.GetComponent<LayoutElement>(); bookedMatchCardListLayout.preferredHeight = 72;
             matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
             if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 1f;
             return panel;
@@ -1364,6 +1384,8 @@ namespace WrestlingUniverse.UI
             RefreshMatchFormats(); matchGenderDropdown.value = 0; matchGenderDropdown.RefreshShownValue();
             PopulateMatchTitleDropdown();
             LoadBookingRoster(sourceId, sourceType); selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
+            editingBookedMatch = null; addMatchToCardLabel.text = "ADD TO CARD"; matchBookingValidationText.text = string.Empty;
+            expandedBookedMatchIds.Clear(); RefreshBookedMatchCards();
             matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
             if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 1f;
         }
@@ -1463,6 +1485,105 @@ namespace WrestlingUniverse.UI
             { var wrestler = availableMatchParticipants.Find(item => item.id == id); if (wrestler != null) names.Add(wrestler.name); }
             matchParticipantCaption.text = names.Count == 0 ? "Select " + needed + " wrestlers" :
                 string.Join(", ", names.ToArray()) + "  (" + names.Count + "/" + needed + ")";
+            if (addMatchToCardButton != null) addMatchToCardButton.interactable = names.Count == needed;
+        }
+
+        private void AddMatchToCard()
+        {
+            var needed = RequiredMatchParticipants();
+            if (selectedMatchParticipantIds.Count != needed)
+            { matchBookingValidationText.text = "Select exactly " + needed + " wrestlers for this format."; return; }
+            try
+            {
+                var current = repository.LoadBookedMatches(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
+                    ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+                var match = new BookedMatchRecord {
+                    id = editingBookedMatch == null ? Guid.NewGuid().ToString("N") : editingBookedMatch.id,
+                    universeId = ActiveBookingSession.UniverseId, sourceId = ActiveBookingSession.SourceId, sourceType = ActiveBookingSession.SourceType,
+                    year = ActiveBookingSession.Year, month = ActiveBookingSession.Month, week = ActiveBookingSession.Week,
+                    dayOfWeek = ActiveBookingSession.DayOfWeek, cardPosition = editingBookedMatch == null ? current.Count + 1 : editingBookedMatch.cardPosition,
+                    stipulation = matchStipulationDropdown.options[matchStipulationDropdown.value].text,
+                    format = matchFormatDropdown.options[matchFormatDropdown.value].text,
+                    titleId = matchTitleDropdown.value == 0 ? string.Empty : matchTitleOptions[matchTitleDropdown.value - 1].id,
+                    createdUtc = editingBookedMatch == null ? DateTime.UtcNow.ToString("O") : editingBookedMatch.createdUtc,
+                    participantIds = new List<string>(selectedMatchParticipantIds) };
+                repository.SaveBookedMatch(match); editingBookedMatch = null; selectedMatchParticipantIds.Clear();
+                addMatchToCardLabel.text = "ADD TO CARD"; matchBookingValidationText.text = string.Empty; matchBookingExpanded = false;
+                RefreshMatchParticipants(); RefreshBookedMatchCards(); RefreshBookingAccordionLayout();
+                Canvas.ForceUpdateCanvases(); if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 0f;
+            }
+            catch (Exception exception) { Debug.LogException(exception); matchBookingValidationText.text = "The match could not be added. Check the Console."; }
+        }
+
+        private void RefreshBookedMatchCards()
+        {
+            if (repository == null || bookedMatchCardList == null || string.IsNullOrEmpty(ActiveBookingSession.SourceId)) return;
+            for (var index = bookedMatchCardList.childCount - 1; index >= 0; index--) Destroy(bookedMatchCardList.GetChild(index).gameObject);
+            var matches = repository.LoadBookedMatches(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
+                ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+            var heading = CreateRuntimeText("MatchCardHeading", bookedMatchCardList, "MATCH CARD  (" + matches.Count + ")", 15,
+                new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft, Vector2.zero, Vector2.one, FontStyle.Bold);
+            heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 46;
+            var totalHeight = 46f;
+            foreach (var match in matches)
+            {
+                var expanded = expandedBookedMatchIds.Contains(match.id); var height = expanded ? 330f : 68f; totalHeight += height + 12;
+                var card = CreateRuntimePanel("BookedMatch_" + match.id, bookedMatchCardList, new Color32(7, 12, 22, 255), Vector2.zero, Vector2.one);
+                card.AddComponent<LayoutElement>().preferredHeight = height;
+                var names = new List<string>(); foreach (var wrestler in match.participants) names.Add(wrestler.name.ToUpperInvariant());
+                var header = CreateRuntimeButton("Header", card.transform, string.Empty, new Vector2(0, expanded ? .80f : 0), Vector2.one,
+                    new Color32(7, 12, 22, 255), Color.white);
+                var oldLabel = header.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
+                CreateRuntimeText("Title", header.transform, "#" + match.cardPosition + "  " + string.Join("  VS  ", names.ToArray()) + "  [" + match.format.ToUpperInvariant() + "]",
+                    15, Color.white, TextAnchor.MiddleLeft, new Vector2(.035f, .08f), new Vector2(.90f, .92f), FontStyle.Bold);
+                CreateRuntimeText("Arrow", header.transform, expanded ? "▲" : "▼", 15, new Color32(190, 198, 210, 255), TextAnchor.MiddleCenter,
+                    new Vector2(.92f, .08f), new Vector2(.98f, .92f), FontStyle.Bold);
+                header.onClick.AddListener(() => ToggleBookedMatchCard(match.id));
+                if (!expanded) continue;
+                var body = CreateRuntimePanel("Body", card.transform, new Color32(10, 16, 27, 255), new Vector2(.015f, .03f), new Vector2(.985f, .78f));
+                var participantCount = Mathf.Max(1, match.participants.Count); var slotWidth = .94f / participantCount;
+                for (var index = 0; index < match.participants.Count; index++)
+                {
+                    var wrestler = match.participants[index]; var texture = UniverseImageStorage.LoadTexture(wrestler.photoPath);
+                    var left = .03f + index * slotWidth; var right = left + slotWidth;
+                    if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(body.transform, "Wrestler_" + index, texture,
+                        new Vector2(left + .01f, .23f), new Vector2(right - .01f, .95f)); }
+                    CreateRuntimeText("Name_" + index, body.transform, wrestler.name.ToUpperInvariant(), 12, Color.white, TextAnchor.MiddleCenter,
+                        new Vector2(left, .16f), new Vector2(right, .26f), FontStyle.Bold);
+                    if (index < match.participants.Count - 1) CreateRuntimeText("Vs_" + index, body.transform, "VS", 13,
+                        new Color32(240, 190, 42, 255), TextAnchor.MiddleCenter, new Vector2(right - .025f, .45f), new Vector2(right + .025f, .58f), FontStyle.Bold);
+                }
+                var edit = CreateRuntimeButton("Edit", body.transform, "EDIT", new Vector2(.03f, .025f), new Vector2(.28f, .14f),
+                    new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditBookedMatch(match));
+                var delete = CreateRuntimeButton("Delete", body.transform, "DELETE MATCH", new Vector2(.72f, .025f), new Vector2(.97f, .14f),
+                    new Color32(84, 31, 39, 255), Color.white); delete.onClick.AddListener(() => DeleteBookedMatch(match.id));
+            }
+            bookedMatchCardListLayout.preferredHeight = Mathf.Max(58, totalHeight);
+            Canvas.ForceUpdateCanvases(); LayoutRebuilder.ForceRebuildLayoutImmediate(bookingAccordionContent);
+        }
+
+        private void ToggleBookedMatchCard(string matchId)
+        {
+            if (!expandedBookedMatchIds.Add(matchId)) expandedBookedMatchIds.Remove(matchId);
+            RefreshBookedMatchCards();
+        }
+
+        private void EditBookedMatch(BookedMatchRecord match)
+        {
+            editingBookedMatch = match; matchBookingExpanded = true; segmentBookingExpanded = false;
+            SetDropdownValue(matchStipulationDropdown, match.stipulation); RefreshMatchFormats(); SetDropdownValue(matchFormatDropdown, match.format);
+            matchGenderDropdown.value = 0; matchGenderDropdown.RefreshShownValue(); RefreshMatchParticipants();
+            selectedMatchParticipantIds.Clear(); selectedMatchParticipantIds.AddRange(match.participantIds); RefreshMatchParticipants();
+            var titleIndex = matchTitleOptions.FindIndex(item => item.id == match.titleId); matchTitleDropdown.value = titleIndex < 0 ? 0 : titleIndex + 1;
+            matchTitleDropdown.RefreshShownValue(); addMatchToCardLabel.text = "SAVE MATCH"; matchBookingValidationText.text = string.Empty;
+            RefreshBookingAccordionLayout(); if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 1f;
+        }
+
+        private void DeleteBookedMatch(string matchId)
+        {
+            repository.DeleteBookedMatch(matchId); expandedBookedMatchIds.Remove(matchId);
+            if (editingBookedMatch != null && editingBookedMatch.id == matchId) editingBookedMatch = null;
+            RefreshBookedMatchCards(); RefreshBookingAccordionLayout();
         }
 
         private void ToggleMatchBooking()

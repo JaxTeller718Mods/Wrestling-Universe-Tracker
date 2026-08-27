@@ -1,0 +1,26 @@
+using System;
+using System.Collections.Generic;
+
+namespace WrestlingUniverse.UI
+{
+    [Serializable]
+    public sealed class BookedMatchRecord
+    {
+        public string id;
+        public string universeId;
+        public string sourceId;
+        public string sourceType;
+        public int year;
+        public string month;
+        public int week;
+        public string dayOfWeek;
+        public int cardPosition;
+        public string stipulation;
+        public string format;
+        public string titleId;
+        public string titleName;
+        public string createdUtc;
+        public List<string> participantIds = new List<string>();
+        public List<WrestlerRecord> participants = new List<WrestlerRecord>();
+    }
+}

@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 10;
+        private const int CurrentSchemaVersion = 11;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -89,6 +89,16 @@ namespace WrestlingUniverse.Persistence
                     "PRIMARY KEY(special_id, brand_id), FOREIGN KEY(special_id) REFERENCES specials(id) ON DELETE CASCADE, " +
                     "FOREIGN KEY(brand_id) REFERENCES brands(id) ON DELETE CASCADE);");
                 Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_specials_universe ON specials(universe_id, month, name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS booked_matches (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, source_id TEXT NOT NULL, " +
+                    "source_type TEXT NOT NULL, calendar_year INTEGER NOT NULL, calendar_month TEXT NOT NULL, calendar_week INTEGER NOT NULL, " +
+                    "day_of_week TEXT NOT NULL, card_position INTEGER NOT NULL, stipulation TEXT NOT NULL, format TEXT NOT NULL, title_id TEXT, " +
+                    "created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS booked_match_participants (match_id TEXT NOT NULL, wrestler_id TEXT NOT NULL, position INTEGER NOT NULL, " +
+                    "PRIMARY KEY(match_id, wrestler_id), FOREIGN KEY(match_id) REFERENCES booked_matches(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(wrestler_id) REFERENCES wrestlers(id) ON DELETE CASCADE);");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_booked_matches_show ON booked_matches(universe_id, source_id, calendar_year, calendar_month, calendar_week, day_of_week, card_position);");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -527,6 +537,77 @@ namespace WrestlingUniverse.Persistence
                 }
                 transaction.Commit();
             }
+        }
+
+        public List<UI.BookedMatchRecord> LoadBookedMatches(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
+        {
+            var results = new List<UI.BookedMatchRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT m.id, m.universe_id, m.source_id, m.source_type, m.calendar_year, m.calendar_month, m.calendar_week, " +
+                    "m.day_of_week, m.card_position, m.stipulation, m.format, COALESCE(m.title_id, ''), COALESCE(t.name, ''), m.created_utc " +
+                    "FROM booked_matches m LEFT JOIN titles t ON t.id = m.title_id WHERE m.universe_id=@universe AND m.source_id=@source " +
+                    "AND m.calendar_year=@year AND m.calendar_month=@month AND m.calendar_week=@week AND m.day_of_week=@day ORDER BY m.card_position;";
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                using (var reader = command.ExecuteReader()) while (reader.Read()) results.Add(new UI.BookedMatchRecord {
+                    id = reader.GetString(0), universeId = reader.GetString(1), sourceId = reader.GetString(2), sourceType = reader.GetString(3),
+                    year = reader.GetInt32(4), month = reader.GetString(5), week = reader.GetInt32(6), dayOfWeek = reader.GetString(7),
+                    cardPosition = reader.GetInt32(8), stipulation = reader.GetString(9), format = reader.GetString(10), titleId = reader.GetString(11),
+                    titleName = reader.GetString(12), createdUtc = reader.GetString(13) });
+            }
+            var wrestlers = LoadWrestlers(universeId);
+            foreach (var match in results)
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT wrestler_id FROM booked_match_participants WHERE match_id=@match ORDER BY position;";
+                AddParameter(command, "@match", match.id);
+                using (var reader = command.ExecuteReader()) while (reader.Read())
+                {
+                    var id = reader.GetString(0); match.participantIds.Add(id);
+                    var wrestler = wrestlers.Find(item => item.id == id); if (wrestler != null) match.participants.Add(wrestler);
+                }
+            }
+            return results;
+        }
+
+        public void SaveBookedMatch(UI.BookedMatchRecord match)
+        {
+            using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT OR REPLACE INTO booked_matches(id, universe_id, source_id, source_type, calendar_year, calendar_month, " +
+                        "calendar_week, day_of_week, card_position, stipulation, format, title_id, created_utc, updated_utc) VALUES(@id,@universe,@source,@type," +
+                        "@year,@month,@week,@day,@position,@stipulation,@format,@title,@created,@updated);";
+                    AddParameter(command, "@id", match.id); AddParameter(command, "@universe", match.universeId); AddParameter(command, "@source", match.sourceId);
+                    AddParameter(command, "@type", match.sourceType); AddParameter(command, "@year", match.year); AddParameter(command, "@month", match.month);
+                    AddParameter(command, "@week", match.week); AddParameter(command, "@day", match.dayOfWeek); AddParameter(command, "@position", match.cardPosition);
+                    AddParameter(command, "@stipulation", match.stipulation); AddParameter(command, "@format", match.format);
+                    AddParameter(command, "@title", string.IsNullOrEmpty(match.titleId) ? null : match.titleId);
+                    AddParameter(command, "@created", match.createdUtc); AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+                }
+                using (var command = CreateCommand(connection))
+                { command.Transaction = transaction; command.CommandText = "DELETE FROM booked_match_participants WHERE match_id=@id;"; AddParameter(command, "@id", match.id); command.ExecuteNonQuery(); }
+                for (var index = 0; index < match.participantIds.Count; index++)
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction; command.CommandText = "INSERT INTO booked_match_participants(match_id,wrestler_id,position) VALUES(@match,@wrestler,@position);";
+                    AddParameter(command, "@match", match.id); AddParameter(command, "@wrestler", match.participantIds[index]); AddParameter(command, "@position", index); command.ExecuteNonQuery();
+                }
+                transaction.Commit();
+            }
+        }
+
+        public void DeleteBookedMatch(string matchId)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            { command.CommandText = "DELETE FROM booked_matches WHERE id=@id;"; AddParameter(command, "@id", matchId); command.ExecuteNonQuery(); }
         }
 
         private SqliteConnection OpenConnection()
