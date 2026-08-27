@@ -187,7 +187,7 @@ namespace WrestlingUniverse.UI
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
-        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage" };
+        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs" };
         private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
         private static readonly string[] TagTeamMatchFormats = {
             "Two on Two", "Two on Two - Mixed Tag", "Two on Two - Tornado Tag", "Three on Three", "Three on Three - Tornado Tag",
@@ -195,6 +195,21 @@ namespace WrestlingUniverse.UI
             "Handicap - One on Two Tornado Tag", "Handicap - One on Three", "Handicap - Two on Three"
         };
         private static readonly string[] ExtremeRulesMatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "Two on Two" };
+        private static readonly string[] FallsCountAnywhereMatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way" };
+        private static readonly string[] SteelCageMatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "Two on Two" };
+        private static readonly string[] HellInACellMatchFormats = {
+            "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "Two on Two", "Three on Three", "Triple Threat Tornado Tag"
+        };
+        private static readonly string[] TableMatchFormats = {
+            "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "Two on Two", "Three on Three", "Triple Threat Tornado Tag"
+        };
+        private static readonly string[] LadderMatchFormats = {
+            "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way", "Two on Two", "Three on Three",
+            "Four on Four", "Triple Threat Tornado Tag"
+        };
+        private static readonly string[] TablesLaddersChairsMatchFormats = {
+            "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "Two on Two", "Three on Three", "Triple Threat Tornado Tag"
+        };
         private static readonly string[] MatchGenderFilters = { "Both Genders", "Male", "Female", "Neutral" };
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
@@ -1425,7 +1440,14 @@ namespace WrestlingUniverse.UI
         {
             var stipulation = matchStipulationDropdown.options[matchStipulationDropdown.value].text;
             var formats = stipulation == "Tag Team" ? new List<string>(TagTeamMatchFormats) :
-                (stipulation == "Extreme Rules" || stipulation == "Falls Count Anywhere" || stipulation == "Hell in a Cell" || stipulation == "Steel Cage") ?
+                stipulation == "Falls Count Anywhere" ? new List<string>(FallsCountAnywhereMatchFormats) :
+                stipulation == "Steel Cage" ? new List<string>(SteelCageMatchFormats) :
+                stipulation == "Hell in a Cell" ? new List<string>(HellInACellMatchFormats) :
+                stipulation == "Table Match" ? new List<string>(TableMatchFormats) :
+                stipulation == "Ladder Match" ? new List<string>(LadderMatchFormats) :
+                (stipulation == "Tables, Ladders, and Chairs" || stipulation == "Tables, Ladders and Chairs Match") ?
+                    new List<string>(TablesLaddersChairsMatchFormats) :
+                stipulation == "Extreme Rules" ?
                     new List<string>(ExtremeRulesMatchFormats) : new List<string>(MatchFormats);
             matchFormatDropdown.ClearOptions(); matchFormatDropdown.AddOptions(formats); matchFormatDropdown.value = 0; matchFormatDropdown.RefreshShownValue();
             selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
@@ -1605,7 +1627,8 @@ namespace WrestlingUniverse.UI
         private void EditBookedMatch(BookedMatchRecord match)
         {
             editingBookedMatch = match; matchBookingExpanded = true; segmentBookingExpanded = false;
-            SetDropdownValue(matchStipulationDropdown, match.stipulation); RefreshMatchFormats(); SetDropdownValue(matchFormatDropdown, match.format);
+            var savedStipulation = match.stipulation == "Tables, Ladders and Chairs Match" ? "Tables, Ladders, and Chairs" : match.stipulation;
+            SetDropdownValue(matchStipulationDropdown, savedStipulation); RefreshMatchFormats(); SetDropdownValue(matchFormatDropdown, match.format);
             matchGenderDropdown.value = 0; matchGenderDropdown.RefreshShownValue(); RefreshMatchParticipants();
             selectedMatchParticipantIds.Clear(); selectedMatchParticipantIds.AddRange(match.participantIds); RefreshMatchParticipants();
             var titleIndex = matchTitleOptions.FindIndex(item => item.id == match.titleId); matchTitleDropdown.value = titleIndex < 0 ? 0 : titleIndex + 1;
