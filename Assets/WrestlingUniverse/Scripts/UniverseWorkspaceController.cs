@@ -187,7 +187,7 @@ namespace WrestlingUniverse.UI
         private static readonly string[] WeekDays = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
         private static readonly string[] Months = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         private static readonly string[] MonthWeeks = { "Week 1", "Week 2", "Week 3", "Week 4" };
-        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs" };
+        private static readonly string[] MatchStipulations = { "Normal", "Tag Team", "Extreme Rules", "Falls Count Anywhere", "Hell in a Cell", "Steel Cage", "Table Match", "Ladder Match", "Tables, Ladders, and Chairs", "Submission Match", "Last Man Standing", "No Holds Barred", "Iron Man Match" };
         private static readonly string[] MatchFormats = { "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "6-Way", "8-Way" };
         private static readonly string[] TagTeamMatchFormats = {
             "Two on Two", "Two on Two - Mixed Tag", "Two on Two - Tornado Tag", "Three on Three", "Three on Three - Tornado Tag",
@@ -210,6 +210,7 @@ namespace WrestlingUniverse.UI
         private static readonly string[] TablesLaddersChairsMatchFormats = {
             "One on One", "Triple Threat", "Fatal 4-Way", "5-Way", "Two on Two", "Three on Three", "Triple Threat Tornado Tag"
         };
+        private static readonly string[] OneOnOneOnlyMatchFormats = { "One on One" };
         private static readonly string[] MatchGenderFilters = { "Both Genders", "Male", "Female", "Neutral" };
 
         private static readonly string[] Dispositions = { "Face", "Heel", "Neutral" };
@@ -1447,6 +1448,8 @@ namespace WrestlingUniverse.UI
                 stipulation == "Ladder Match" ? new List<string>(LadderMatchFormats) :
                 (stipulation == "Tables, Ladders, and Chairs" || stipulation == "Tables, Ladders and Chairs Match") ?
                     new List<string>(TablesLaddersChairsMatchFormats) :
+                (stipulation == "Submission Match" || stipulation == "Last Man Standing" || stipulation == "No Holds Barred" || stipulation == "Iron Man Match") ?
+                    new List<string>(OneOnOneOnlyMatchFormats) :
                 stipulation == "Extreme Rules" ?
                     new List<string>(ExtremeRulesMatchFormats) : new List<string>(MatchFormats);
             matchFormatDropdown.ClearOptions(); matchFormatDropdown.AddOptions(formats); matchFormatDropdown.value = 0; matchFormatDropdown.RefreshShownValue();
