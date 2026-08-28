@@ -50,11 +50,13 @@ namespace WrestlingUniverse.UI
         private Dropdown teamDispositionDropdown;
         private Text memberSelectionCaption;
         private GameObject memberDropdownMenu;
+        private RectTransform memberDropdownContent;
         private Text teamValidationText;
         private Text teamFormTitle;
         private Text teamSaveLabel;
         private TeamRecord editingTeam;
         private readonly List<string> selectedTeamMemberIds = new List<string>();
+        private bool suppressTeamMemberBuild;
         private List<WrestlerRecord> availableTeamMembers = new List<WrestlerRecord>();
         private GameObject teamPhotoHost;
         private Text teamPhotoStatus;
@@ -886,7 +888,15 @@ namespace WrestlingUniverse.UI
             memberField.onClick.AddListener(ToggleMemberDropdown);
             memberDropdownMenu = CreateRuntimePanel("MemberDropdown", memberField.transform, new Color32(5, 9, 20, 255), new Vector2(0, 1f), new Vector2(1, 2.9f));
             var memberCanvas = memberDropdownMenu.AddComponent<Canvas>(); memberCanvas.overrideSorting = true; memberCanvas.sortingOrder = 500;
-            memberDropdownMenu.AddComponent<GraphicRaycaster>(); memberDropdownMenu.SetActive(false);
+            memberDropdownMenu.AddComponent<GraphicRaycaster>(); memberDropdownMenu.AddComponent<RectMask2D>();
+            var memberScroll = memberDropdownMenu.AddComponent<ScrollRect>(); memberScroll.horizontal = false; memberScroll.vertical = true;
+            memberScroll.movementType = ScrollRect.MovementType.Clamped; memberScroll.scrollSensitivity = 4f;
+            var memberContentObject = new GameObject("MemberContent", typeof(RectTransform));
+            memberContentObject.transform.SetParent(memberDropdownMenu.transform, false); memberDropdownContent = memberContentObject.GetComponent<RectTransform>();
+            memberDropdownContent.anchorMin = new Vector2(0, 1); memberDropdownContent.anchorMax = new Vector2(1, 1);
+            memberDropdownContent.pivot = new Vector2(.5f, 1); memberDropdownContent.anchoredPosition = Vector2.zero;
+            memberScroll.viewport = memberDropdownMenu.GetComponent<RectTransform>(); memberScroll.content = memberDropdownContent;
+            memberDropdownMenu.SetActive(false);
 
             teamPhotoHost = CreateRuntimePanel("TeamPhoto", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .07f), new Vector2(.28f, .34f));
             var photoButton = CreateRuntimeButton("ChooseTeamPhoto", teamPhotoHost.transform, "+  CHOOSE PHOTO", new Vector2(.06f, .06f), new Vector2(.94f, .28f),
@@ -1045,14 +1055,18 @@ namespace WrestlingUniverse.UI
             editingTeam = null; teamFormTitle.text = "CREATE TEAM"; teamSaveLabel.text = "CREATE TEAM";
             teamNameInput.text = string.Empty; PopulateBrandDropdown(teamBrandDropdown); teamDispositionDropdown.value = 0;
             teamDispositionDropdown.RefreshShownValue();
-            selectedTeamMemberIds.Clear(); teamValidationText.text = string.Empty; BuildMemberDropdown();
+            selectedTeamMemberIds.Clear(); teamValidationText.text = string.Empty;
+            if (!suppressTeamMemberBuild) BuildMemberDropdown();
             selectedTeamPhotoPath = string.Empty; teamPhotoStatus.text = "No photo selected";
             var oldPreview = teamPhotoHost.transform.Find("PhotoPreview"); if (oldPreview != null) Destroy(oldPreview.gameObject);
         }
 
         private void EditTeam(TeamRecord team)
         {
-            ShowTeamCreation(); editingTeam = team; teamFormTitle.text = "EDIT TEAM"; teamSaveLabel.text = "SAVE CHANGES";
+            suppressTeamMemberBuild = true;
+            ShowTeamCreation();
+            suppressTeamMemberBuild = false;
+            editingTeam = team; teamFormTitle.text = "EDIT TEAM"; teamSaveLabel.text = "SAVE CHANGES";
             teamNameInput.text = team.name; PopulateBrandDropdown(teamBrandDropdown, team.brand); SetDropdownValue(teamDispositionDropdown, team.disposition);
             selectedTeamMemberIds.Clear(); selectedTeamMemberIds.AddRange(team.memberIds); BuildMemberDropdown();
             selectedTeamPhotoPath = string.Empty;
@@ -1080,23 +1094,47 @@ namespace WrestlingUniverse.UI
         private void BuildMemberDropdown()
         {
             availableTeamMembers = repository.LoadWrestlers(ActiveUniverseSession.UniverseId);
-            for (var index = memberDropdownMenu.transform.childCount - 1; index >= 0; index--) Destroy(memberDropdownMenu.transform.GetChild(index).gameObject);
-            var count = Mathf.Max(1, availableTeamMembers.Count);
-            var rowHeight = 1f / count;
+            for (var index = memberDropdownContent.childCount - 1; index >= 0; index--)
+            {
+                var oldRow = memberDropdownContent.GetChild(index).gameObject;
+                oldRow.SetActive(false); Destroy(oldRow);
+            }
+            const float rowHeight = 38f;
+            memberDropdownContent.sizeDelta = new Vector2(0, Mathf.Max(rowHeight, availableTeamMembers.Count * rowHeight));
             for (var index = 0; index < availableTeamMembers.Count; index++)
             {
                 var wrestler = availableTeamMembers[index];
-                var top = 1f - index * rowHeight; var bottom = top - rowHeight;
+                var top = 1f; var bottom = 0f;
                 var selected = selectedTeamMemberIds.Contains(wrestler.id);
-                var row = CreateRuntimeButton("Member_" + wrestler.id, memberDropdownMenu.transform,
+                var row = CreateRuntimeButton("Member_" + wrestler.id, memberDropdownContent,
                     (selected ? "✓  " : "     ") + wrestler.name, new Vector2(.02f, bottom), new Vector2(.98f, top),
                     selected ? new Color32(25, 65, 82, 255) : new Color32(9, 15, 29, 255), Color.white);
+                var rowRect = row.GetComponent<RectTransform>(); rowRect.anchorMin = new Vector2(.02f, 1); rowRect.anchorMax = new Vector2(.98f, 1);
+                rowRect.pivot = new Vector2(.5f, 1); rowRect.anchoredPosition = new Vector2(0, -index * rowHeight); rowRect.sizeDelta = new Vector2(0, rowHeight);
+                var rowLabel = row.transform.Find("Label");
+                if (rowLabel != null)
+                {
+                    rowLabel.gameObject.SetActive(false);
+                }
                 row.onClick.AddListener(() => ToggleTeamMember(wrestler.id));
             }
+            for (var index = 0; index < availableTeamMembers.Count; index++)
+            {
+                var wrestler = availableTeamMembers[index];
+                var top = 1f; var bottom = 0f;
+                var selected = selectedTeamMemberIds.Contains(wrestler.id);
+                var overlay = CreateRuntimeText("MemberLabel_" + wrestler.id, memberDropdownContent,
+                    (selected ? "SELECTED  /  " : string.Empty) + wrestler.name, 15, Color.white, TextAnchor.MiddleLeft,
+                    new Vector2(.06f, bottom), new Vector2(.96f, top), selected ? FontStyle.Bold : FontStyle.Normal);
+                var overlayRect = overlay.rectTransform; overlayRect.anchorMin = new Vector2(.06f, 1); overlayRect.anchorMax = new Vector2(.96f, 1);
+                overlayRect.pivot = new Vector2(.5f, 1); overlayRect.anchoredPosition = new Vector2(0, -index * rowHeight);
+                overlayRect.sizeDelta = new Vector2(0, rowHeight);
+                overlay.raycastTarget = false;
+            }
             if (availableTeamMembers.Count == 0)
-                CreateRuntimeText("NoMembers", memberDropdownMenu.transform, "No wrestlers available", 14, new Color32(142, 160, 181, 255),
+                CreateRuntimeText("NoMembers", memberDropdownContent, "No wrestlers available", 14, new Color32(142, 160, 181, 255),
                     TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-            UpdateMemberCaption();
+            UpdateMemberCaption(); Canvas.ForceUpdateCanvases();
         }
 
         private void ToggleTeamMember(string wrestlerId)
@@ -1618,7 +1656,11 @@ namespace WrestlingUniverse.UI
                 (activeBookingBrandNames.Count == 0 || activeBookingBrandNames.Contains(wrestler.brand)) &&
                 (gender == "Both Genders" || wrestler.gender == gender));
             selectedMatchParticipantIds.RemoveAll(id => availableMatchParticipants.Find(wrestler => wrestler.id == id) == null);
-            for (var index = matchParticipantMenu.transform.childCount - 1; index >= 0; index--) Destroy(matchParticipantMenu.transform.GetChild(index).gameObject);
+            for (var index = matchParticipantMenu.transform.childCount - 1; index >= 0; index--)
+            {
+                var oldRow = matchParticipantMenu.transform.GetChild(index).gameObject;
+                oldRow.SetActive(false); Destroy(oldRow);
+            }
             var count = Mathf.Max(1, availableMatchParticipants.Count); var rowHeight = 1f / count;
             for (var index = 0; index < availableMatchParticipants.Count; index++)
             {
@@ -1698,7 +1740,11 @@ namespace WrestlingUniverse.UI
             availableSegmentParticipants = repository.LoadWrestlers(ActiveUniverseSession.UniverseId).FindAll(wrestler =>
                 activeBookingBrandNames.Count == 0 || activeBookingBrandNames.Contains(wrestler.brand));
             selectedSegmentParticipantIds.RemoveAll(id => availableSegmentParticipants.Find(wrestler => wrestler.id == id) == null);
-            for (var index = segmentParticipantMenu.transform.childCount - 1; index >= 0; index--) Destroy(segmentParticipantMenu.transform.GetChild(index).gameObject);
+            for (var index = segmentParticipantMenu.transform.childCount - 1; index >= 0; index--)
+            {
+                var oldRow = segmentParticipantMenu.transform.GetChild(index).gameObject;
+                oldRow.SetActive(false); Destroy(oldRow);
+            }
             var count = Mathf.Max(1, availableSegmentParticipants.Count); var rowHeight = 1f / count;
             for (var index = 0; index < availableSegmentParticipants.Count; index++)
             {
