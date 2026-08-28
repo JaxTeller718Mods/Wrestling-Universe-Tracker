@@ -482,7 +482,7 @@ namespace WrestlingUniverse.UI
                 new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); create.onClick.AddListener(ShowLocationCreation);
             var table = CreateRuntimePanel("LocationTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
             table.AddComponent<RectMask2D>(); var scroll = table.AddComponent<ScrollRect>();
-            scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 4f; scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 8f; scroll.movementType = ScrollRect.MovementType.Clamped;
             locationGrid = new GameObject("LocationCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter)).transform;
             locationGrid.SetParent(table.transform, false); var locationRect = locationGrid.GetComponent<RectTransform>();
             locationRect.anchorMin = new Vector2(.02f, 1); locationRect.anchorMax = new Vector2(.98f, 1); locationRect.pivot = new Vector2(.5f, 1);
@@ -720,7 +720,7 @@ namespace WrestlingUniverse.UI
             var workspacePanel = CreateRuntimePanel("BookingWorkspace", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.035f, .04f), new Vector2(.965f, .62f));
             workspacePanel.AddComponent<RectMask2D>();
             bookingAccordionScroll = workspacePanel.AddComponent<ScrollRect>(); bookingAccordionScroll.horizontal = false; bookingAccordionScroll.vertical = true;
-            bookingAccordionScroll.movementType = ScrollRect.MovementType.Clamped; bookingAccordionScroll.scrollSensitivity = 4f;
+            bookingAccordionScroll.movementType = ScrollRect.MovementType.Clamped; bookingAccordionScroll.scrollSensitivity = 8f;
             var contentObject = new GameObject("AccordionContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
             contentObject.transform.SetParent(workspacePanel.transform, false); bookingAccordionContent = contentObject.GetComponent<RectTransform>();
             bookingAccordionContent.anchorMin = new Vector2(.02f, 1); bookingAccordionContent.anchorMax = new Vector2(.98f, 1);
@@ -878,7 +878,7 @@ namespace WrestlingUniverse.UI
             table.AddComponent<RectMask2D>();
             var teamScroll = table.AddComponent<ScrollRect>();
             teamScroll.horizontal = false; teamScroll.vertical = true;
-            teamScroll.movementType = ScrollRect.MovementType.Clamped; teamScroll.scrollSensitivity = 4f;
+            teamScroll.movementType = ScrollRect.MovementType.Clamped; teamScroll.scrollSensitivity = 8f;
             teamGrid = new GameObject("TeamCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter)).transform;
             teamGrid.SetParent(table.transform, false);
             var teamGridRect = teamGrid.GetComponent<RectTransform>();
@@ -918,7 +918,7 @@ namespace WrestlingUniverse.UI
             var memberCanvas = memberDropdownMenu.AddComponent<Canvas>(); memberCanvas.overrideSorting = true; memberCanvas.sortingOrder = 500;
             memberDropdownMenu.AddComponent<GraphicRaycaster>(); memberDropdownMenu.AddComponent<RectMask2D>();
             var memberScroll = memberDropdownMenu.AddComponent<ScrollRect>(); memberScroll.horizontal = false; memberScroll.vertical = true;
-            memberScroll.movementType = ScrollRect.MovementType.Clamped; memberScroll.scrollSensitivity = 4f;
+            memberScroll.movementType = ScrollRect.MovementType.Clamped; memberScroll.scrollSensitivity = 8f;
             var memberContentObject = new GameObject("MemberContent", typeof(RectTransform));
             memberContentObject.transform.SetParent(memberDropdownMenu.transform, false); memberDropdownContent = memberContentObject.GetComponent<RectTransform>();
             memberDropdownContent.anchorMin = new Vector2(0, 1); memberDropdownContent.anchorMax = new Vector2(1, 1);
@@ -950,7 +950,7 @@ namespace WrestlingUniverse.UI
                 new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255)); create.onClick.AddListener(ShowTitleCreation);
             var table = CreateRuntimePanel("TitleTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
             table.AddComponent<RectMask2D>(); var scroll = table.AddComponent<ScrollRect>();
-            scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 4f; scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 8f; scroll.movementType = ScrollRect.MovementType.Clamped;
             titleGrid = new GameObject("TitleCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter)).transform;
             titleGrid.SetParent(table.transform, false); var rect = titleGrid.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(.02f, 1); rect.anchorMax = new Vector2(.98f, 1); rect.pivot = new Vector2(.5f, 1); rect.anchoredPosition = new Vector2(0, -18); rect.sizeDelta = new Vector2(0, 230);
@@ -1019,7 +1019,7 @@ namespace WrestlingUniverse.UI
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.scrollSensitivity = 4f;
+            scroll.scrollSensitivity = 8f;
             var content = new GameObject("WrestlerCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
             content.transform.SetParent(viewport.transform, false);
             var contentRect = content.GetComponent<RectTransform>();
@@ -2591,6 +2591,7 @@ namespace WrestlingUniverse.UI
             templateRect.sizeDelta = new Vector2(0, 150);
             var scroll = template.AddComponent<ScrollRect>();
             scroll.horizontal = false;
+            scroll.scrollSensitivity = 8f;
             scroll.movementType = ScrollRect.MovementType.Clamped;
 
             var viewport = CreateRuntimePanel("Viewport", template.transform, new Color32(9, 15, 29, 255), new Vector2(.02f, .02f), new Vector2(.98f, .98f));
