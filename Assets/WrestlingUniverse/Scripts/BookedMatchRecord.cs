@@ -45,4 +45,17 @@ namespace WrestlingUniverse.UI
         public List<string> participantIds = new List<string>();
         public List<WrestlerRecord> participants = new List<WrestlerRecord>();
     }
+
+    [Serializable]
+    public sealed class MatchResultRecord
+    {
+        public string matchId;
+        public string winnerWrestlerId;
+        public string finishType;
+        public int rating;
+        public string duration;
+        public string notes;
+        public bool titleChanged;
+        public string createdUtc;
+    }
 }

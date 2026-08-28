@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 13;
+        private const int CurrentSchemaVersion = 16;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -112,6 +112,24 @@ namespace WrestlingUniverse.Persistence
                     "PRIMARY KEY(segment_id, wrestler_id), FOREIGN KEY(segment_id) REFERENCES booked_segments(id) ON DELETE CASCADE, " +
                     "FOREIGN KEY(wrestler_id) REFERENCES wrestlers(id) ON DELETE CASCADE);");
                 Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_booked_segments_show ON booked_segments(universe_id, source_id, calendar_year, calendar_month, calendar_week, day_of_week, card_position);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS booked_show_cards (universe_id TEXT NOT NULL, source_id TEXT NOT NULL, calendar_year INTEGER NOT NULL, " +
+                    "calendar_month TEXT NOT NULL, calendar_week INTEGER NOT NULL, day_of_week TEXT NOT NULL, is_locked INTEGER NOT NULL DEFAULT 0, " +
+                    "updated_utc TEXT NOT NULL, PRIMARY KEY(universe_id,source_id,calendar_year,calendar_month,calendar_week,day_of_week), " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                EnsureColumn(connection, transaction, "booked_show_cards", "results_finalized", "INTEGER NOT NULL DEFAULT 0");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS booked_show_venues (universe_id TEXT NOT NULL, source_id TEXT NOT NULL, calendar_year INTEGER NOT NULL, " +
+                    "calendar_month TEXT NOT NULL, calendar_week INTEGER NOT NULL, day_of_week TEXT NOT NULL, location_id TEXT NOT NULL, " +
+                    "updated_utc TEXT NOT NULL, PRIMARY KEY(universe_id,source_id,calendar_year,calendar_month,calendar_week,day_of_week), " +
+                    "FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(location_id) REFERENCES locations(id) ON DELETE CASCADE);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS booked_match_results (match_id TEXT PRIMARY KEY NOT NULL, winner_wrestler_id TEXT NOT NULL, " +
+                    "finish_type TEXT NOT NULL, rating INTEGER NOT NULL DEFAULT 0 CHECK(rating BETWEEN 0 AND 100), duration TEXT, notes TEXT, " +
+                    "title_changed INTEGER NOT NULL DEFAULT 0, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(match_id) REFERENCES booked_matches(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(winner_wrestler_id) REFERENCES wrestlers(id) ON DELETE RESTRICT);");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -698,6 +716,125 @@ namespace WrestlingUniverse.Persistence
             using (var connection = OpenConnection())
             using (var command = CreateCommand(connection))
             { command.CommandText = "DELETE FROM booked_segments WHERE id=@id;"; AddParameter(command, "@id", segmentId); command.ExecuteNonQuery(); }
+        }
+
+        public bool IsShowCardLocked(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT is_locked FROM booked_show_cards WHERE universe_id=@universe AND source_id=@source AND " +
+                    "calendar_year=@year AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day LIMIT 1;";
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                var value = command.ExecuteScalar(); return value != null && value != DBNull.Value && Convert.ToInt32(value) != 0;
+            }
+        }
+
+        public void SetShowCardLocked(string universeId, string sourceId, int year, string month, int week, string dayOfWeek, bool locked)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "INSERT OR REPLACE INTO booked_show_cards(universe_id,source_id,calendar_year,calendar_month,calendar_week," +
+                    "day_of_week,is_locked,updated_utc) VALUES(@universe,@source,@year,@month,@week,@day,@locked,@updated);";
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                AddParameter(command, "@locked", locked ? 1 : 0); AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+            }
+        }
+
+        public string GetShowVenueId(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT location_id FROM booked_show_venues WHERE universe_id=@universe AND source_id=@source AND " +
+                    "calendar_year=@year AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day LIMIT 1;";
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                var value = command.ExecuteScalar(); return value == null || value == DBNull.Value ? string.Empty : Convert.ToString(value);
+            }
+        }
+
+        public void SetShowVenue(string universeId, string sourceId, int year, string month, int week, string dayOfWeek, string locationId)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                if (string.IsNullOrEmpty(locationId))
+                {
+                    command.CommandText = "DELETE FROM booked_show_venues WHERE universe_id=@universe AND source_id=@source AND calendar_year=@year " +
+                        "AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day;";
+                }
+                else
+                {
+                    command.CommandText = "INSERT OR REPLACE INTO booked_show_venues(universe_id,source_id,calendar_year,calendar_month,calendar_week," +
+                        "day_of_week,location_id,updated_utc) VALUES(@universe,@source,@year,@month,@week,@day,@location,@updated);";
+                    AddParameter(command, "@location", locationId); AddParameter(command, "@updated", DateTime.UtcNow.ToString("O"));
+                }
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek); command.ExecuteNonQuery();
+            }
+        }
+
+        public UI.MatchResultRecord LoadMatchResult(string matchId)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT match_id,winner_wrestler_id,finish_type,rating,COALESCE(duration,''),COALESCE(notes,'')," +
+                    "title_changed,created_utc FROM booked_match_results WHERE match_id=@match LIMIT 1;";
+                AddParameter(command, "@match", matchId);
+                using (var reader = command.ExecuteReader())
+                {
+                    if (!reader.Read()) return null;
+                    return new UI.MatchResultRecord { matchId = reader.GetString(0), winnerWrestlerId = reader.GetString(1),
+                        finishType = reader.GetString(2), rating = reader.GetInt32(3), duration = reader.GetString(4), notes = reader.GetString(5),
+                        titleChanged = reader.GetInt32(6) != 0, createdUtc = reader.GetString(7) };
+                }
+            }
+        }
+
+        public void SaveMatchResult(UI.MatchResultRecord result)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "INSERT OR REPLACE INTO booked_match_results(match_id,winner_wrestler_id,finish_type,rating,duration,notes," +
+                    "title_changed,created_utc,updated_utc) VALUES(@match,@winner,@finish,@rating,@duration,@notes,@changed,@created,@updated);";
+                AddParameter(command, "@match", result.matchId); AddParameter(command, "@winner", result.winnerWrestlerId);
+                AddParameter(command, "@finish", result.finishType); AddParameter(command, "@rating", result.rating);
+                AddParameter(command, "@duration", result.duration); AddParameter(command, "@notes", result.notes);
+                AddParameter(command, "@changed", result.titleChanged ? 1 : 0); AddParameter(command, "@created", result.createdUtc);
+                AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+            }
+        }
+
+        public bool AreShowResultsFinalized(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT results_finalized FROM booked_show_cards WHERE universe_id=@universe AND source_id=@source AND " +
+                    "calendar_year=@year AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day LIMIT 1;";
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                var value = command.ExecuteScalar(); return value != null && value != DBNull.Value && Convert.ToInt32(value) != 0;
+            }
+        }
+
+        public void FinalizeShowResults(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "UPDATE booked_show_cards SET is_locked=1,results_finalized=1,updated_utc=@updated WHERE universe_id=@universe " +
+                    "AND source_id=@source AND calendar_year=@year AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day;";
+                AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); AddParameter(command, "@universe", universeId);
+                AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year); AddParameter(command, "@month", month);
+                AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek); command.ExecuteNonQuery();
+            }
         }
 
         private SqliteConnection OpenConnection()
