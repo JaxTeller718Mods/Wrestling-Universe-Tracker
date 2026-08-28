@@ -36,11 +36,18 @@ namespace WrestlingUniverse.UI
 
         private void Awake()
         {
+            IncreaseExistingFontSizes(2);
             EnsureExitButton();
             modalOverlay.SetActive(false);
             universeCardTemplate.SetActive(false);
             LoadSavedUniverses();
             RefreshSummary();
+        }
+
+        private void IncreaseExistingFontSizes(int amount)
+        {
+            var root = universeCountText != null ? universeCountText.transform.root : transform.root;
+            foreach (var text in root.GetComponentsInChildren<Text>(true)) text.fontSize += amount;
         }
 
         public void ExitApplication()
@@ -267,7 +274,7 @@ namespace WrestlingUniverse.UI
                 labelRect.offsetMax = Vector2.zero;
                 var label = labelObject.GetComponent<Text>();
                 label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                label.fontSize = 16;
+                label.fontSize = 18;
                 label.fontStyle = FontStyle.Bold;
                 label.alignment = TextAnchor.MiddleCenter;
                 label.color = Color.white;
@@ -308,7 +315,7 @@ namespace WrestlingUniverse.UI
                 labelRect.offsetMax = Vector2.zero;
                 var label = labelObject.GetComponent<Text>();
                 label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                label.fontSize = 16;
+                label.fontSize = 18;
                 label.fontStyle = FontStyle.Bold;
                 label.alignment = TextAnchor.MiddleCenter;
                 label.color = new Color32(5, 9, 20, 255);

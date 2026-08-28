@@ -56,6 +56,20 @@ namespace WrestlingUniverse.UI
         public string duration;
         public string notes;
         public bool titleChanged;
+        public bool isDraw;
         public string createdUtc;
+    }
+
+    [Serializable]
+    public sealed class CompetitionRecord
+    {
+        public int wins;
+        public int losses;
+        public int draws;
+
+        public override string ToString()
+        {
+            return wins + "-" + losses + "-" + draws;
+        }
     }
 }

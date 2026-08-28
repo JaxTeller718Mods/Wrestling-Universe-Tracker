@@ -267,6 +267,7 @@ namespace WrestlingUniverse.UI
 
         private void Awake()
         {
+            IncreaseExistingFontSizes(2);
             EnsureNavigationBar();
             EnsureRosterViews();
             if (string.IsNullOrEmpty(ActiveUniverseSession.UniverseId))
@@ -883,8 +884,8 @@ namespace WrestlingUniverse.UI
             teamGrid.SetParent(table.transform, false);
             var teamGridRect = teamGrid.GetComponent<RectTransform>();
             teamGridRect.anchorMin = new Vector2(.02f, 1); teamGridRect.anchorMax = new Vector2(.98f, 1);
-            teamGridRect.pivot = new Vector2(.5f, 1); teamGridRect.anchoredPosition = new Vector2(0, -20); teamGridRect.sizeDelta = new Vector2(0, 360);
-            var grid = teamGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(470, 360); grid.spacing = new Vector2(22, 22);
+            teamGridRect.pivot = new Vector2(.5f, 1); teamGridRect.anchoredPosition = new Vector2(0, -20); teamGridRect.sizeDelta = new Vector2(0, 410);
+            var grid = teamGrid.GetComponent<GridLayoutGroup>(); grid.cellSize = new Vector2(540, 410); grid.spacing = new Vector2(22, 22);
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount; grid.constraintCount = 3; grid.childAlignment = TextAnchor.UpperCenter;
             teamGrid.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             teamScroll.viewport = table.GetComponent<RectTransform>(); teamScroll.content = teamGridRect;
@@ -1027,9 +1028,9 @@ namespace WrestlingUniverse.UI
             contentRect.anchorMax = new Vector2(.98f, 1);
             contentRect.pivot = new Vector2(.5f, 1);
             contentRect.anchoredPosition = new Vector2(0, -20);
-            contentRect.sizeDelta = new Vector2(0, 390);
+            contentRect.sizeDelta = new Vector2(0, 440);
             var grid = content.GetComponent<GridLayoutGroup>();
-            grid.cellSize = new Vector2(340, 390);
+            grid.cellSize = new Vector2(390, 440);
             grid.spacing = new Vector2(22, 22);
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             grid.constraintCount = 4;
@@ -1215,6 +1216,7 @@ namespace WrestlingUniverse.UI
             teamCountText.text = "TEAMS  /  " + teams.Count; emptyTeamsText.gameObject.SetActive(teams.Count == 0);
             foreach (var team in teams)
             {
+                var competitionRecord = repository.GetTeamCompetitionRecord(ActiveUniverseSession.UniverseId, team.memberIds);
                 var card = CreateRuntimePanel("Team_" + team.id, teamGrid, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
                 var texture = UniverseImageStorage.LoadTexture(team.photoPath);
                 if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(card.transform, "TeamPhoto", texture, new Vector2(.04f, .43f), new Vector2(.96f, .97f)); }
@@ -1223,7 +1225,7 @@ namespace WrestlingUniverse.UI
                     new Vector2(textMin, .31f), new Vector2(.94f, .43f), FontStyle.Bold);
                 CreateRuntimeText("Members", card.transform, string.Join("  /  ", team.memberNames.ToArray()), 14, new Color32(142, 160, 181, 255),
                     TextAnchor.MiddleLeft, new Vector2(textMin, .20f), new Vector2(.94f, .31f));
-                CreateRuntimeText("Disposition", card.transform, team.disposition.ToUpperInvariant(), 12, new Color32(45, 190, 230, 255),
+                CreateRuntimeText("Disposition", card.transform, team.disposition.ToUpperInvariant() + "  /  " + competitionRecord, 12, new Color32(45, 190, 230, 255),
                     TextAnchor.MiddleLeft, new Vector2(textMin, .13f), new Vector2(.94f, .20f), FontStyle.Bold);
                 var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .025f), new Vector2(.94f, .12f),
                     new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditTeam(team));
@@ -1924,8 +1926,8 @@ namespace WrestlingUniverse.UI
                 }
                 if (resultsEntryMode)
                 {
-                    var winnerNames = new List<string>(); foreach (var wrestler in match.participants) winnerNames.Add(wrestler.name);
-                    var winnerDropdown = CreateRuntimeDropdown("ResultWinner", body.transform, "WINNER", winnerNames.ToArray(), 0,
+                    var winnerNames = new List<string> { "Draw / No Contest" }; foreach (var wrestler in match.participants) winnerNames.Add(wrestler.name);
+                    var winnerDropdown = CreateRuntimeDropdown("ResultWinner", body.transform, "WINNER", winnerNames.ToArray(), match.participants.Count > 0 ? 1 : 0,
                         new Vector2(.03f, .29f), new Vector2(.48f, .43f));
                     var finishDropdown = CreateRuntimeDropdown("ResultFinish", body.transform, "FINISH", MatchFinishTypes, 0,
                         new Vector2(.52f, .29f), new Vector2(.97f, .43f));
@@ -1942,7 +1944,7 @@ namespace WrestlingUniverse.UI
                         titleChangeButton.transform.Find("Label").GetComponent<Text>().text = "TITLE CHANGED: " + (titleChanged ? "YES" : "NO"); });
                     if (result != null)
                     {
-                        var winnerIndex = match.participants.FindIndex(item => item.id == result.winnerWrestlerId);
+                        var winnerIndex = result.isDraw ? 0 : match.participants.FindIndex(item => item.id == result.winnerWrestlerId) + 1;
                         winnerDropdown.value = Mathf.Max(0, winnerIndex); winnerDropdown.RefreshShownValue();
                         SetDropdownValue(finishDropdown, result.finishType); ratingInput.text = result.rating <= 0 ? string.Empty : result.rating.ToString();
                         durationInput.text = result.duration; notesInput.text = result.notes;
@@ -1955,7 +1957,8 @@ namespace WrestlingUniverse.UI
                 else if (result != null)
                 {
                     var winner = match.participants.Find(item => item.id == result.winnerWrestlerId);
-                    var resultSummary = "WINNER: " + (winner == null ? "Unknown" : winner.name.ToUpperInvariant()) + "  /  " + result.finishType.ToUpperInvariant();
+                    var resultSummary = result.isDraw ? "RESULT: DRAW / NO CONTEST" :
+                        "WINNER: " + (winner == null ? "Unknown" : winner.name.ToUpperInvariant()) + "  /  " + result.finishType.ToUpperInvariant();
                     if (result.rating > 0) resultSummary += "  /  RATING " + result.rating;
                     if (!string.IsNullOrEmpty(result.duration)) resultSummary += "  /  " + result.duration;
                     if (result.titleChanged) resultSummary += "  /  NEW CHAMPION";
@@ -2129,9 +2132,10 @@ namespace WrestlingUniverse.UI
             if (!string.IsNullOrWhiteSpace(ratingInput.text) && (!int.TryParse(ratingInput.text, out rating) || rating < 0 || rating > 100))
             { showResultsValidationText.text = "Match ratings must be between 0 and 100."; RefreshBookingAccordionLayout(); return; }
             repository.SaveMatchResult(new MatchResultRecord {
-                matchId = match.id, winnerWrestlerId = match.participants[winnerDropdown.value].id,
+                matchId = match.id, winnerWrestlerId = match.participants[winnerDropdown.value == 0 ? 0 : winnerDropdown.value - 1].id,
                 finishType = finishDropdown.options[finishDropdown.value].text, rating = rating,
                 duration = durationInput.text.Trim(), notes = notesInput.text.Trim(), titleChanged = titleChanged,
+                isDraw = winnerDropdown.value == 0,
                 createdUtc = existingResult == null ? DateTime.UtcNow.ToString("O") : existingResult.createdUtc
             });
             showResultsValidationText.text = "Result saved for " + BuildMatchupLabel(match) + ".";
@@ -2529,6 +2533,7 @@ namespace WrestlingUniverse.UI
 
         private void CreateWrestlerCard(Transform parent, WrestlerRecord wrestler)
         {
+            var competitionRecord = repository.GetWrestlerCompetitionRecord(ActiveUniverseSession.UniverseId, wrestler.id);
             var card = CreateRuntimePanel("Wrestler_" + wrestler.id, parent, new Color32(14, 23, 40, 255), Vector2.zero, Vector2.one);
             var texture = UniverseImageStorage.LoadTexture(wrestler.photoPath);
             if (texture != null)
@@ -2540,7 +2545,8 @@ namespace WrestlingUniverse.UI
                 new Vector2(.06f, .22f), new Vector2(.72f, .34f), FontStyle.Bold);
             CreateRuntimeText("Overall", card.transform, wrestler.overall.ToString(), 22, new Color32(240, 190, 42, 255), TextAnchor.MiddleRight,
                 new Vector2(.72f, .22f), new Vector2(.94f, .34f), FontStyle.Bold);
-            CreateRuntimeText("Details", card.transform, wrestler.disposition.ToUpperInvariant() + "  /  " + wrestler.tier.ToUpperInvariant(), 11,
+            CreateRuntimeText("Details", card.transform, wrestler.disposition.ToUpperInvariant() + "  /  " + wrestler.tier.ToUpperInvariant() +
+                "  /  " + competitionRecord, 11,
                 new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft, new Vector2(.06f, .13f), new Vector2(.94f, .22f));
             var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.06f, .025f), new Vector2(.94f, .13f),
                 new Color32(25, 45, 65, 255), Color.white);
@@ -2647,12 +2653,18 @@ namespace WrestlingUniverse.UI
             SetRuntimeRect(textObject.GetComponent<RectTransform>(), min, max);
             var text = textObject.GetComponent<Text>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = size;
+            text.fontSize = size + 2;
             text.fontStyle = style;
             text.alignment = alignment;
             text.color = color;
             text.text = value;
             return text;
+        }
+
+        private void IncreaseExistingFontSizes(int amount)
+        {
+            var root = promotionNameText != null ? promotionNameText.transform.root : transform.root;
+            foreach (var text in root.GetComponentsInChildren<Text>(true)) text.fontSize += amount;
         }
 
         private void EnsureNavigationBar()
@@ -2700,15 +2712,11 @@ namespace WrestlingUniverse.UI
             var owner = background.Find("Owner");
             var startDate = background.Find("StartDate");
             var workspace = background.Find("FeatureWorkspace");
-            if (sectionTitleText != null) SetRuntimeRect(sectionTitleText.rectTransform, new Vector2(.04f, .735f), new Vector2(.6f, .785f));
-            if (title != null)
-            {
-                SetRuntimeRect(title.GetComponent<RectTransform>(), new Vector2(.04f, .665f), new Vector2(.85f, .735f));
-                var titleText = title.GetComponent<Text>(); if (titleText != null) titleText.fontSize = 36;
-            }
-            if (owner != null) SetRuntimeRect(owner.GetComponent<RectTransform>(), new Vector2(.04f, .605f), new Vector2(.46f, .665f));
-            if (startDate != null) SetRuntimeRect(startDate.GetComponent<RectTransform>(), new Vector2(.48f, .605f), new Vector2(.9f, .665f));
-            if (workspace != null) SetRuntimeRect(workspace.GetComponent<RectTransform>(), new Vector2(.04f, .055f), new Vector2(.96f, .585f));
+            if (sectionTitleText != null) sectionTitleText.gameObject.SetActive(false);
+            if (title != null) title.gameObject.SetActive(false);
+            if (owner != null) owner.gameObject.SetActive(false);
+            if (startDate != null) startDate.gameObject.SetActive(false);
+            if (workspace != null) SetRuntimeRect(workspace.GetComponent<RectTransform>(), new Vector2(.04f, .055f), new Vector2(.96f, .785f));
         }
 
         private void EnsureBookingDropdown(Transform navigation)
@@ -2794,7 +2802,7 @@ namespace WrestlingUniverse.UI
             SetRuntimeRect(label.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
             var text = label.GetComponent<Text>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 14;
+            text.fontSize = 16;
             text.fontStyle = FontStyle.Bold;
             text.alignment = TextAnchor.MiddleCenter;
             text.color = Color.white;

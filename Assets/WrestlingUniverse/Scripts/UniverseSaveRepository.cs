@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 16;
+        private const int CurrentSchemaVersion = 17;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -130,6 +130,7 @@ namespace WrestlingUniverse.Persistence
                     "title_changed INTEGER NOT NULL DEFAULT 0, created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
                     "FOREIGN KEY(match_id) REFERENCES booked_matches(id) ON DELETE CASCADE, " +
                     "FOREIGN KEY(winner_wrestler_id) REFERENCES wrestlers(id) ON DELETE RESTRICT);");
+                EnsureColumn(connection, transaction, "booked_match_results", "is_draw", "INTEGER NOT NULL DEFAULT 0");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -784,14 +785,14 @@ namespace WrestlingUniverse.Persistence
             using (var command = CreateCommand(connection))
             {
                 command.CommandText = "SELECT match_id,winner_wrestler_id,finish_type,rating,COALESCE(duration,''),COALESCE(notes,'')," +
-                    "title_changed,created_utc FROM booked_match_results WHERE match_id=@match LIMIT 1;";
+                    "title_changed,created_utc,is_draw FROM booked_match_results WHERE match_id=@match LIMIT 1;";
                 AddParameter(command, "@match", matchId);
                 using (var reader = command.ExecuteReader())
                 {
                     if (!reader.Read()) return null;
                     return new UI.MatchResultRecord { matchId = reader.GetString(0), winnerWrestlerId = reader.GetString(1),
                         finishType = reader.GetString(2), rating = reader.GetInt32(3), duration = reader.GetString(4), notes = reader.GetString(5),
-                        titleChanged = reader.GetInt32(6) != 0, createdUtc = reader.GetString(7) };
+                        titleChanged = reader.GetInt32(6) != 0, createdUtc = reader.GetString(7), isDraw = reader.GetInt32(8) != 0 };
                 }
             }
         }
@@ -802,11 +803,12 @@ namespace WrestlingUniverse.Persistence
             using (var command = CreateCommand(connection))
             {
                 command.CommandText = "INSERT OR REPLACE INTO booked_match_results(match_id,winner_wrestler_id,finish_type,rating,duration,notes," +
-                    "title_changed,created_utc,updated_utc) VALUES(@match,@winner,@finish,@rating,@duration,@notes,@changed,@created,@updated);";
+                    "title_changed,created_utc,updated_utc,is_draw) VALUES(@match,@winner,@finish,@rating,@duration,@notes,@changed,@created,@updated,@draw);";
                 AddParameter(command, "@match", result.matchId); AddParameter(command, "@winner", result.winnerWrestlerId);
                 AddParameter(command, "@finish", result.finishType); AddParameter(command, "@rating", result.rating);
                 AddParameter(command, "@duration", result.duration); AddParameter(command, "@notes", result.notes);
                 AddParameter(command, "@changed", result.titleChanged ? 1 : 0); AddParameter(command, "@created", result.createdUtc);
+                AddParameter(command, "@draw", result.isDraw ? 1 : 0);
                 AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
             }
         }
@@ -835,6 +837,75 @@ namespace WrestlingUniverse.Persistence
                 AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year); AddParameter(command, "@month", month);
                 AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek); command.ExecuteNonQuery();
             }
+        }
+
+        public UI.CompetitionRecord GetWrestlerCompetitionRecord(string universeId, string wrestlerId)
+        {
+            var record = new UI.CompetitionRecord();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT COALESCE(SUM(CASE WHEN r.is_draw=0 AND r.winner_wrestler_id=@wrestler THEN 1 ELSE 0 END),0), " +
+                    "COALESCE(SUM(CASE WHEN r.is_draw=0 AND r.winner_wrestler_id<>@wrestler THEN 1 ELSE 0 END),0), " +
+                    "COALESCE(SUM(CASE WHEN r.is_draw=1 THEN 1 ELSE 0 END),0) FROM booked_match_participants p " +
+                    "JOIN booked_matches m ON m.id=p.match_id JOIN booked_match_results r ON r.match_id=m.id " +
+                    "JOIN booked_show_cards c ON c.universe_id=m.universe_id AND c.source_id=m.source_id AND c.calendar_year=m.calendar_year " +
+                    "AND c.calendar_month=m.calendar_month AND c.calendar_week=m.calendar_week AND c.day_of_week=m.day_of_week " +
+                    "WHERE m.universe_id=@universe AND p.wrestler_id=@wrestler AND c.results_finalized=1;";
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@wrestler", wrestlerId);
+                using (var reader = command.ExecuteReader()) if (reader.Read())
+                { record.wins = Convert.ToInt32(reader.GetValue(0)); record.losses = Convert.ToInt32(reader.GetValue(1)); record.draws = Convert.ToInt32(reader.GetValue(2)); }
+            }
+            return record;
+        }
+
+        public UI.CompetitionRecord GetTeamCompetitionRecord(string universeId, List<string> teamMemberIds)
+        {
+            var record = new UI.CompetitionRecord();
+            if (teamMemberIds == null || teamMemberIds.Count < 2) return record;
+            var matchIds = new List<string>(); var formats = new List<string>(); var winners = new List<string>(); var draws = new List<bool>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT m.id,m.format,r.winner_wrestler_id,r.is_draw FROM booked_matches m JOIN booked_match_results r ON r.match_id=m.id " +
+                    "JOIN booked_show_cards c ON c.universe_id=m.universe_id AND c.source_id=m.source_id AND c.calendar_year=m.calendar_year " +
+                    "AND c.calendar_month=m.calendar_month AND c.calendar_week=m.calendar_week AND c.day_of_week=m.day_of_week " +
+                    "WHERE m.universe_id=@universe AND c.results_finalized=1 ORDER BY m.created_utc;";
+                AddParameter(command, "@universe", universeId);
+                using (var reader = command.ExecuteReader()) while (reader.Read())
+                { matchIds.Add(reader.GetString(0)); formats.Add(reader.GetString(1)); winners.Add(reader.GetString(2)); draws.Add(reader.GetInt32(3) != 0); }
+            }
+            for (var matchIndex = 0; matchIndex < matchIds.Count; matchIndex++)
+            {
+                var split = StatTeamSplitIndex(formats[matchIndex]); if (split <= 0) continue;
+                var participants = new List<string>();
+                using (var connection = OpenConnection())
+                using (var command = CreateCommand(connection))
+                {
+                    command.CommandText = "SELECT wrestler_id FROM booked_match_participants WHERE match_id=@match ORDER BY position;";
+                    AddParameter(command, "@match", matchIds[matchIndex]);
+                    using (var reader = command.ExecuteReader()) while (reader.Read()) participants.Add(reader.GetString(0));
+                }
+                if (split >= participants.Count) continue;
+                var firstSide = participants.GetRange(0, split); var secondSide = participants.GetRange(split, participants.Count - split);
+                List<string> teamSide = null;
+                if (firstSide.Count >= 2 && firstSide.TrueForAll(teamMemberIds.Contains)) teamSide = firstSide;
+                else if (secondSide.Count >= 2 && secondSide.TrueForAll(teamMemberIds.Contains)) teamSide = secondSide;
+                if (teamSide == null) continue;
+                if (draws[matchIndex]) record.draws++;
+                else if (teamSide.Contains(winners[matchIndex])) record.wins++; else record.losses++;
+            }
+            return record;
+        }
+
+        private static int StatTeamSplitIndex(string format)
+        {
+            if (format == "Two on Two" || format == "Two on Two - Mixed Tag" || format == "Two on Two - Tornado Tag" ||
+                format == "Handicap - Two on Three") return 2;
+            if (format == "Three on Three" || format == "Three on Three - Tornado Tag" || format == "Triple Threat Tornado Tag") return 3;
+            if (format == "Four on Four" || format == "4-Way Tornado Tag") return 4;
+            if (format == "Handicap - One on Two" || format == "Handicap - One on Two Tornado Tag" || format == "Handicap - One on Three") return 1;
+            return 0;
         }
 
         private SqliteConnection OpenConnection()
