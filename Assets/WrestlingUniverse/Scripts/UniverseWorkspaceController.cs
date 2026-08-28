@@ -163,6 +163,16 @@ namespace WrestlingUniverse.UI
         private GameObject segmentBookingHeader;
         private GameObject segmentBookingBody;
         private Text segmentBookingArrow;
+        private InputField segmentTitleInput;
+        private InputField segmentSummaryInput;
+        private GameObject segmentParticipantMenu;
+        private Text segmentParticipantCaption;
+        private Text segmentValidationText;
+        private Text addSegmentToCardLabel;
+        private readonly List<string> selectedSegmentParticipantIds = new List<string>();
+        private List<WrestlerRecord> availableSegmentParticipants = new List<WrestlerRecord>();
+        private BookedSegmentRecord editingBookedSegment;
+        private readonly HashSet<string> expandedBookedSegmentIds = new HashSet<string>();
         private RectTransform bookingAccordionContent;
         private ScrollRect bookingAccordionScroll;
         private bool matchBookingExpanded;
@@ -753,7 +763,36 @@ namespace WrestlingUniverse.UI
             segmentBookingHeader.AddComponent<LayoutElement>().preferredHeight = 72;
             segmentBookingHeader.GetComponent<Button>().onClick.AddListener(ToggleSegmentBooking);
             segmentBookingBody = CreateRuntimePanel("SegmentBookingBody", bookingAccordionContent, new Color32(12, 10, 25, 255), Vector2.zero, Vector2.one);
-            segmentBookingBody.AddComponent<LayoutElement>().preferredHeight = 300;
+            segmentBookingBody.AddComponent<LayoutElement>().preferredHeight = 540;
+            segmentTitleInput = CreateRuntimeInput("SegmentTitle", segmentBookingBody.transform, "SEGMENT TITLE", "Enter a title for this segment",
+                new Vector2(.035f, .79f), new Vector2(.965f, .96f));
+            var segmentParticipantSelector = CreateRuntimeButton("SegmentParticipantSelector", segmentBookingBody.transform, string.Empty,
+                new Vector2(.035f, .59f), new Vector2(.965f, .76f), new Color32(5, 11, 23, 255), Color.white);
+            var segmentParticipantLabel = segmentParticipantSelector.transform.Find("Label"); if (segmentParticipantLabel != null) Destroy(segmentParticipantLabel.gameObject);
+            CreateRuntimeText("FieldLabel", segmentParticipantSelector.transform, "WRESTLERS INVOLVED", 12, new Color32(185, 103, 255, 255), TextAnchor.MiddleLeft,
+                new Vector2(.035f, .58f), new Vector2(.96f, .94f), FontStyle.Bold);
+            segmentParticipantCaption = CreateRuntimeText("Value", segmentParticipantSelector.transform, "Select wrestlers", 16, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.035f, .06f), new Vector2(.90f, .62f));
+            CreateRuntimeText("Arrow", segmentParticipantSelector.transform, "â–¼", 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.92f, .08f), new Vector2(.98f, .62f));
+            segmentParticipantSelector.onClick.AddListener(ToggleSegmentParticipantMenu);
+            segmentParticipantMenu = CreateRuntimePanel("SegmentParticipantDropdown", segmentParticipantSelector.transform, new Color32(5, 9, 20, 255),
+                new Vector2(0, 1f), new Vector2(1, 3.5f));
+            var segmentParticipantCanvas = segmentParticipantMenu.AddComponent<Canvas>(); segmentParticipantCanvas.overrideSorting = true; segmentParticipantCanvas.sortingOrder = 510;
+            segmentParticipantMenu.AddComponent<GraphicRaycaster>(); segmentParticipantMenu.SetActive(false);
+            segmentSummaryInput = CreateRuntimeInput("SegmentSummary", segmentBookingBody.transform, "SEGMENT SUMMARY", "Describe what happens during this segment...",
+                new Vector2(.035f, .22f), new Vector2(.965f, .55f));
+            segmentSummaryInput.lineType = InputField.LineType.MultiLineNewline;
+            segmentSummaryInput.textComponent.alignment = TextAnchor.UpperLeft;
+            SetRuntimeRect(segmentSummaryInput.textComponent.rectTransform, new Vector2(.035f, .08f), new Vector2(.965f, .76f));
+            var segmentPlaceholder = segmentSummaryInput.placeholder as Text;
+            if (segmentPlaceholder != null) { segmentPlaceholder.alignment = TextAnchor.UpperLeft; SetRuntimeRect(segmentPlaceholder.rectTransform, new Vector2(.035f, .08f), new Vector2(.965f, .76f)); }
+            segmentValidationText = CreateRuntimeText("SegmentValidation", segmentBookingBody.transform, string.Empty, 12, new Color32(255, 105, 105, 255),
+                TextAnchor.MiddleLeft, new Vector2(.035f, .14f), new Vector2(.72f, .20f), FontStyle.Bold);
+            var addSegmentButton = CreateRuntimeButton("AddSegmentToCard", segmentBookingBody.transform, "+  ADD TO CARD",
+                new Vector2(.035f, .025f), new Vector2(.965f, .13f), new Color32(45, 34, 70, 255), Color.white);
+            addSegmentToCardLabel = addSegmentButton.transform.Find("Label").GetComponent<Text>();
+            addSegmentButton.onClick.AddListener(AddSegmentToCard);
             var matchListObject = new GameObject("BookedMatchCardList", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
             matchListObject.transform.SetParent(bookingAccordionContent, false); bookedMatchCardList = matchListObject.transform;
             var matchListLayout = matchListObject.GetComponent<VerticalLayoutGroup>(); matchListLayout.spacing = 12;
@@ -1441,8 +1480,10 @@ namespace WrestlingUniverse.UI
             RefreshMatchFormats(); matchGenderDropdown.value = 0; matchGenderDropdown.RefreshShownValue();
             PopulateMatchTitleDropdown();
             LoadBookingRoster(sourceId, sourceType); selectedMatchParticipantIds.Clear(); RefreshMatchParticipants();
+            selectedSegmentParticipantIds.Clear(); segmentTitleInput.text = string.Empty; segmentSummaryInput.text = string.Empty;
+            segmentValidationText.text = string.Empty; editingBookedSegment = null; addSegmentToCardLabel.text = "ADD TO CARD"; RefreshSegmentParticipants();
             editingBookedMatch = null; addMatchToCardLabel.text = "ADD TO CARD"; matchBookingValidationText.text = string.Empty;
-            expandedBookedMatchIds.Clear(); RefreshBookedMatchCards();
+            expandedBookedMatchIds.Clear(); expandedBookedSegmentIds.Clear(); RefreshBookedMatchCards();
             matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
             if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 1f;
         }
@@ -1619,11 +1660,16 @@ namespace WrestlingUniverse.UI
             {
                 var current = repository.LoadBookedMatches(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
                     ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+                var currentSegments = repository.LoadBookedSegments(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
+                    ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+                var nextCardPosition = 1;
+                foreach (var existing in current) nextCardPosition = Mathf.Max(nextCardPosition, existing.cardPosition + 1);
+                foreach (var existing in currentSegments) nextCardPosition = Mathf.Max(nextCardPosition, existing.cardPosition + 1);
                 var match = new BookedMatchRecord {
                     id = editingBookedMatch == null ? Guid.NewGuid().ToString("N") : editingBookedMatch.id,
                     universeId = ActiveBookingSession.UniverseId, sourceId = ActiveBookingSession.SourceId, sourceType = ActiveBookingSession.SourceType,
                     year = ActiveBookingSession.Year, month = ActiveBookingSession.Month, week = ActiveBookingSession.Week,
-                    dayOfWeek = ActiveBookingSession.DayOfWeek, cardPosition = editingBookedMatch == null ? current.Count + 1 : editingBookedMatch.cardPosition,
+                    dayOfWeek = ActiveBookingSession.DayOfWeek, cardPosition = editingBookedMatch == null ? nextCardPosition : editingBookedMatch.cardPosition,
                     stipulation = matchStipulationDropdown.options[matchStipulationDropdown.value].text,
                     format = matchFormatDropdown.options[matchFormatDropdown.value].text,
                     titleId = matchTitleDropdown.value == 0 ? string.Empty : matchTitleOptions[matchTitleDropdown.value - 1].id,
@@ -1640,20 +1686,100 @@ namespace WrestlingUniverse.UI
             catch (Exception exception) { Debug.LogException(exception); matchBookingValidationText.text = "The match could not be added. Check the Console."; }
         }
 
+        private void ToggleSegmentParticipantMenu()
+        {
+            segmentParticipantMenu.SetActive(!segmentParticipantMenu.activeSelf);
+            if (segmentParticipantMenu.activeSelf) segmentParticipantMenu.transform.SetAsLastSibling();
+        }
+
+        private void RefreshSegmentParticipants()
+        {
+            if (repository == null || segmentParticipantMenu == null) return;
+            availableSegmentParticipants = repository.LoadWrestlers(ActiveUniverseSession.UniverseId).FindAll(wrestler =>
+                activeBookingBrandNames.Count == 0 || activeBookingBrandNames.Contains(wrestler.brand));
+            selectedSegmentParticipantIds.RemoveAll(id => availableSegmentParticipants.Find(wrestler => wrestler.id == id) == null);
+            for (var index = segmentParticipantMenu.transform.childCount - 1; index >= 0; index--) Destroy(segmentParticipantMenu.transform.GetChild(index).gameObject);
+            var count = Mathf.Max(1, availableSegmentParticipants.Count); var rowHeight = 1f / count;
+            for (var index = 0; index < availableSegmentParticipants.Count; index++)
+            {
+                var wrestler = availableSegmentParticipants[index]; var top = 1f - index * rowHeight; var bottom = top - rowHeight;
+                var selected = selectedSegmentParticipantIds.Contains(wrestler.id);
+                var row = CreateRuntimeButton("SegmentParticipant_" + wrestler.id, segmentParticipantMenu.transform,
+                    (selected ? "âœ“  " : "     ") + wrestler.name, new Vector2(.015f, bottom), new Vector2(.985f, top),
+                    selected ? new Color32(55, 38, 78, 255) : new Color32(9, 15, 29, 255), Color.white);
+                row.onClick.AddListener(() => ToggleSegmentParticipant(wrestler.id));
+            }
+            if (availableSegmentParticipants.Count == 0)
+                CreateRuntimeText("NoSegmentParticipants", segmentParticipantMenu.transform, "No wrestlers are available for this show", 13,
+                    new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            UpdateSegmentParticipantCaption();
+        }
+
+        private void ToggleSegmentParticipant(string wrestlerId)
+        {
+            if (selectedSegmentParticipantIds.Contains(wrestlerId)) selectedSegmentParticipantIds.Remove(wrestlerId);
+            else selectedSegmentParticipantIds.Add(wrestlerId);
+            RefreshSegmentParticipants(); segmentParticipantMenu.SetActive(true);
+        }
+
+        private void UpdateSegmentParticipantCaption()
+        {
+            var names = new List<string>();
+            foreach (var id in selectedSegmentParticipantIds)
+            { var wrestler = availableSegmentParticipants.Find(item => item.id == id); if (wrestler != null) names.Add(wrestler.name); }
+            segmentParticipantCaption.text = names.Count == 0 ? "Select wrestlers" : string.Join(", ", names.ToArray());
+        }
+
+        private void AddSegmentToCard()
+        {
+            if (string.IsNullOrWhiteSpace(segmentTitleInput.text)) { segmentValidationText.text = "Enter a segment title."; return; }
+            if (selectedSegmentParticipantIds.Count == 0) { segmentValidationText.text = "Select at least one wrestler."; return; }
+            if (string.IsNullOrWhiteSpace(segmentSummaryInput.text)) { segmentValidationText.text = "Enter a segment summary."; return; }
+            try
+            {
+                var matches = repository.LoadBookedMatches(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
+                    ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+                var segments = repository.LoadBookedSegments(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
+                    ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+                var nextCardPosition = 1;
+                foreach (var existing in matches) nextCardPosition = Mathf.Max(nextCardPosition, existing.cardPosition + 1);
+                foreach (var existing in segments) nextCardPosition = Mathf.Max(nextCardPosition, existing.cardPosition + 1);
+                repository.SaveBookedSegment(new BookedSegmentRecord {
+                    id = editingBookedSegment == null ? Guid.NewGuid().ToString("N") : editingBookedSegment.id,
+                    universeId = ActiveBookingSession.UniverseId, sourceId = ActiveBookingSession.SourceId,
+                    sourceType = ActiveBookingSession.SourceType, year = ActiveBookingSession.Year, month = ActiveBookingSession.Month,
+                    week = ActiveBookingSession.Week, dayOfWeek = ActiveBookingSession.DayOfWeek,
+                    cardPosition = editingBookedSegment == null ? nextCardPosition : editingBookedSegment.cardPosition,
+                    title = segmentTitleInput.text.Trim(), summary = segmentSummaryInput.text.Trim(),
+                    createdUtc = editingBookedSegment == null ? DateTime.UtcNow.ToString("O") : editingBookedSegment.createdUtc,
+                    participantIds = new List<string>(selectedSegmentParticipantIds)
+                });
+                editingBookedSegment = null; segmentTitleInput.text = string.Empty; segmentSummaryInput.text = string.Empty; selectedSegmentParticipantIds.Clear();
+                segmentValidationText.text = string.Empty; addSegmentToCardLabel.text = "ADD TO CARD"; segmentBookingExpanded = false; RefreshSegmentParticipants();
+                RefreshBookedMatchCards(); RefreshBookingAccordionLayout();
+                Canvas.ForceUpdateCanvases(); if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 0f;
+            }
+            catch (Exception exception) { Debug.LogException(exception); segmentValidationText.text = "The segment could not be added. Check the Console."; }
+        }
+
         private void RefreshBookedMatchCards()
         {
             if (repository == null || bookedMatchCardList == null || string.IsNullOrEmpty(ActiveBookingSession.SourceId)) return;
             for (var index = bookedMatchCardList.childCount - 1; index >= 0; index--) Destroy(bookedMatchCardList.GetChild(index).gameObject);
             var matches = repository.LoadBookedMatches(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
                 ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
-            var heading = CreateRuntimeText("MatchCardHeading", bookedMatchCardList, "MATCH CARD  (" + matches.Count + ")", 15,
+            var segments = repository.LoadBookedSegments(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
+                ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+            var heading = CreateRuntimeText("MatchCardHeading", bookedMatchCardList, "SHOW CARD  (" + (matches.Count + segments.Count) + ")", 15,
                 new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft, Vector2.zero, Vector2.one, FontStyle.Bold);
             heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 46;
             var totalHeight = 46f;
+            var cardPositions = new Dictionary<Transform, int>();
             foreach (var match in matches)
             {
                 var expanded = expandedBookedMatchIds.Contains(match.id); var height = expanded ? 330f : 68f; totalHeight += height + 12;
                 var card = CreateRuntimePanel("BookedMatch_" + match.id, bookedMatchCardList, new Color32(7, 12, 22, 255), Vector2.zero, Vector2.one);
+                cardPositions[card.transform] = match.cardPosition;
                 card.AddComponent<LayoutElement>().preferredHeight = height;
                 var header = CreateRuntimeButton("Header", card.transform, string.Empty, new Vector2(0, expanded ? .80f : 0), Vector2.one,
                     new Color32(7, 12, 22, 255), Color.white);
@@ -1689,6 +1815,43 @@ namespace WrestlingUniverse.UI
                 var delete = CreateRuntimeButton("Delete", body.transform, "DELETE MATCH", new Vector2(.72f, .025f), new Vector2(.97f, .14f),
                     new Color32(84, 31, 39, 255), Color.white); delete.onClick.AddListener(() => DeleteBookedMatch(match.id));
             }
+            foreach (var segment in segments)
+            {
+                var expanded = expandedBookedSegmentIds.Contains(segment.id); var height = expanded ? 330f : 68f; totalHeight += height + 12;
+                var card = CreateRuntimePanel("BookedSegment_" + segment.id, bookedMatchCardList, new Color32(15, 10, 28, 255), Vector2.zero, Vector2.one);
+                cardPositions[card.transform] = segment.cardPosition; card.AddComponent<LayoutElement>().preferredHeight = height;
+                var header = CreateRuntimeButton("Header", card.transform, string.Empty, new Vector2(0, expanded ? .80f : 0), Vector2.one,
+                    new Color32(15, 10, 28, 255), Color.white);
+                var oldLabel = header.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
+                CreateRuntimeText("Title", header.transform, "#" + segment.cardPosition + "  " + segment.title.ToUpperInvariant() + "  [SEGMENT]",
+                    15, Color.white, TextAnchor.MiddleLeft, new Vector2(.035f, .08f), new Vector2(.90f, .92f), FontStyle.Bold);
+                CreateRuntimeText("Arrow", header.transform, expanded ? "â–²" : "â–¼", 15, new Color32(190, 198, 210, 255), TextAnchor.MiddleCenter,
+                    new Vector2(.92f, .08f), new Vector2(.98f, .92f), FontStyle.Bold);
+                header.onClick.AddListener(() => ToggleBookedSegmentCard(segment.id));
+                if (!expanded) continue;
+                var body = CreateRuntimePanel("Body", card.transform, new Color32(18, 12, 31, 255), new Vector2(.015f, .03f), new Vector2(.985f, .78f));
+                var participantCount = Mathf.Max(1, segment.participants.Count); var slotWidth = .54f / participantCount;
+                for (var index = 0; index < segment.participants.Count; index++)
+                {
+                    var wrestler = segment.participants[index]; var texture = UniverseImageStorage.LoadTexture(wrestler.photoPath);
+                    var left = .03f + index * slotWidth; var right = left + slotWidth;
+                    if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(body.transform, "Wrestler_" + index, texture,
+                        new Vector2(left + .01f, .28f), new Vector2(right - .01f, .94f)); }
+                    CreateRuntimeText("Name_" + index, body.transform, wrestler.name.ToUpperInvariant(), 11, Color.white, TextAnchor.MiddleCenter,
+                        new Vector2(left, .18f), new Vector2(right, .29f), FontStyle.Bold);
+                }
+                CreateRuntimeText("RecapLabel", body.transform, "SEGMENT RECAP", 11, new Color32(185, 103, 255, 255), TextAnchor.MiddleLeft,
+                    new Vector2(.61f, .82f), new Vector2(.96f, .94f), FontStyle.Bold);
+                CreateRuntimeText("Recap", body.transform, segment.summary, 12, new Color32(205, 210, 220, 255), TextAnchor.UpperLeft,
+                    new Vector2(.61f, .22f), new Vector2(.96f, .82f));
+                var edit = CreateRuntimeButton("Edit", body.transform, "EDIT", new Vector2(.03f, .025f), new Vector2(.28f, .14f),
+                    new Color32(45, 34, 70, 255), Color.white); edit.onClick.AddListener(() => EditBookedSegment(segment));
+                var delete = CreateRuntimeButton("Delete", body.transform, "DELETE SEGMENT", new Vector2(.72f, .025f), new Vector2(.97f, .14f),
+                    new Color32(84, 31, 39, 255), Color.white); delete.onClick.AddListener(() => DeleteBookedSegment(segment.id));
+            }
+            var orderedCards = new List<Transform>(cardPositions.Keys);
+            orderedCards.Sort((left, right) => cardPositions[left].CompareTo(cardPositions[right]));
+            for (var index = 0; index < orderedCards.Count; index++) orderedCards[index].SetSiblingIndex(index + 1);
             bookedMatchCardListLayout.preferredHeight = Mathf.Max(58, totalHeight);
             Canvas.ForceUpdateCanvases(); LayoutRebuilder.ForceRebuildLayoutImmediate(bookingAccordionContent);
         }
@@ -1716,6 +1879,31 @@ namespace WrestlingUniverse.UI
         {
             if (!expandedBookedMatchIds.Add(matchId)) expandedBookedMatchIds.Remove(matchId);
             RefreshBookedMatchCards();
+        }
+
+        private void ToggleBookedSegmentCard(string segmentId)
+        {
+            if (!expandedBookedSegmentIds.Add(segmentId)) expandedBookedSegmentIds.Remove(segmentId);
+            RefreshBookedMatchCards();
+        }
+
+        private void EditBookedSegment(BookedSegmentRecord segment)
+        {
+            editingBookedSegment = segment; segmentBookingExpanded = true; matchBookingExpanded = false;
+            segmentTitleInput.text = segment.title; segmentSummaryInput.text = segment.summary;
+            selectedSegmentParticipantIds.Clear(); selectedSegmentParticipantIds.AddRange(segment.participantIds);
+            RefreshSegmentParticipants(); addSegmentToCardLabel.text = "SAVE SEGMENT"; segmentValidationText.text = string.Empty;
+            RefreshBookingAccordionLayout(); if (bookingAccordionScroll != null) bookingAccordionScroll.verticalNormalizedPosition = 1f;
+        }
+
+        private void DeleteBookedSegment(string segmentId)
+        {
+            repository.DeleteBookedSegment(segmentId); expandedBookedSegmentIds.Remove(segmentId);
+            if (editingBookedSegment != null && editingBookedSegment.id == segmentId)
+            {
+                editingBookedSegment = null; addSegmentToCardLabel.text = "ADD TO CARD";
+            }
+            RefreshBookedMatchCards(); RefreshBookingAccordionLayout();
         }
 
         private void EditBookedMatch(BookedMatchRecord match)
@@ -1748,6 +1936,7 @@ namespace WrestlingUniverse.UI
             matchBookingExpanded = !matchBookingExpanded;
             if (matchBookingExpanded) segmentBookingExpanded = false;
             if (!matchBookingExpanded && matchParticipantMenu != null) matchParticipantMenu.SetActive(false);
+            if (segmentParticipantMenu != null) segmentParticipantMenu.SetActive(false);
             RefreshBookingAccordionLayout();
             if (bookingAccordionScroll != null && matchBookingExpanded) bookingAccordionScroll.verticalNormalizedPosition = 1f;
         }
@@ -1756,6 +1945,7 @@ namespace WrestlingUniverse.UI
         {
             segmentBookingExpanded = !segmentBookingExpanded;
             if (segmentBookingExpanded) { matchBookingExpanded = false; if (matchParticipantMenu != null) matchParticipantMenu.SetActive(false); }
+            if (!segmentBookingExpanded && segmentParticipantMenu != null) segmentParticipantMenu.SetActive(false);
             RefreshBookingAccordionLayout();
             if (bookingAccordionScroll != null && segmentBookingExpanded) bookingAccordionScroll.verticalNormalizedPosition = 0f;
         }

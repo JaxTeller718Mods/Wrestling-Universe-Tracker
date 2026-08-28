@@ -26,4 +26,23 @@ namespace WrestlingUniverse.UI
         public List<string> participantIds = new List<string>();
         public List<WrestlerRecord> participants = new List<WrestlerRecord>();
     }
+
+    [Serializable]
+    public sealed class BookedSegmentRecord
+    {
+        public string id;
+        public string universeId;
+        public string sourceId;
+        public string sourceType;
+        public int year;
+        public string month;
+        public int week;
+        public string dayOfWeek;
+        public int cardPosition;
+        public string title;
+        public string summary;
+        public string createdUtc;
+        public List<string> participantIds = new List<string>();
+        public List<WrestlerRecord> participants = new List<WrestlerRecord>();
+    }
 }

@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 12;
+        private const int CurrentSchemaVersion = 13;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -102,6 +102,16 @@ namespace WrestlingUniverse.Persistence
                     "PRIMARY KEY(match_id, wrestler_id), FOREIGN KEY(match_id) REFERENCES booked_matches(id) ON DELETE CASCADE, " +
                     "FOREIGN KEY(wrestler_id) REFERENCES wrestlers(id) ON DELETE CASCADE);");
                 Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_booked_matches_show ON booked_matches(universe_id, source_id, calendar_year, calendar_month, calendar_week, day_of_week, card_position);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS booked_segments (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, source_id TEXT NOT NULL, " +
+                    "source_type TEXT NOT NULL, calendar_year INTEGER NOT NULL, calendar_month TEXT NOT NULL, calendar_week INTEGER NOT NULL, " +
+                    "day_of_week TEXT NOT NULL, card_position INTEGER NOT NULL, title TEXT NOT NULL, summary TEXT NOT NULL, created_utc TEXT NOT NULL, " +
+                    "updated_utc TEXT NOT NULL, FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS booked_segment_participants (segment_id TEXT NOT NULL, wrestler_id TEXT NOT NULL, position INTEGER NOT NULL, " +
+                    "PRIMARY KEY(segment_id, wrestler_id), FOREIGN KEY(segment_id) REFERENCES booked_segments(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(wrestler_id) REFERENCES wrestlers(id) ON DELETE CASCADE);");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_booked_segments_show ON booked_segments(universe_id, source_id, calendar_year, calendar_month, calendar_week, day_of_week, card_position);");
 
                 using (var command = CreateCommand(connection))
                 {
@@ -617,6 +627,77 @@ namespace WrestlingUniverse.Persistence
             using (var connection = OpenConnection())
             using (var command = CreateCommand(connection))
             { command.CommandText = "DELETE FROM booked_matches WHERE id=@id;"; AddParameter(command, "@id", matchId); command.ExecuteNonQuery(); }
+        }
+
+        public List<UI.BookedSegmentRecord> LoadBookedSegments(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
+        {
+            var results = new List<UI.BookedSegmentRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT id, universe_id, source_id, source_type, calendar_year, calendar_month, calendar_week, day_of_week, " +
+                    "card_position, title, summary, created_utc FROM booked_segments WHERE universe_id=@universe AND source_id=@source " +
+                    "AND calendar_year=@year AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day ORDER BY card_position;";
+                AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                using (var reader = command.ExecuteReader()) while (reader.Read()) results.Add(new UI.BookedSegmentRecord {
+                    id = reader.GetString(0), universeId = reader.GetString(1), sourceId = reader.GetString(2), sourceType = reader.GetString(3),
+                    year = reader.GetInt32(4), month = reader.GetString(5), week = reader.GetInt32(6), dayOfWeek = reader.GetString(7),
+                    cardPosition = reader.GetInt32(8), title = reader.GetString(9), summary = reader.GetString(10), createdUtc = reader.GetString(11) });
+            }
+            var wrestlers = LoadWrestlers(universeId);
+            foreach (var segment in results)
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT wrestler_id FROM booked_segment_participants WHERE segment_id=@segment ORDER BY position;";
+                AddParameter(command, "@segment", segment.id);
+                using (var reader = command.ExecuteReader()) while (reader.Read())
+                {
+                    var id = reader.GetString(0); segment.participantIds.Add(id);
+                    var wrestler = wrestlers.Find(item => item.id == id); if (wrestler != null) segment.participants.Add(wrestler);
+                }
+            }
+            return results;
+        }
+
+        public void SaveBookedSegment(UI.BookedSegmentRecord segment)
+        {
+            using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT OR REPLACE INTO booked_segments(id,universe_id,source_id,source_type,calendar_year,calendar_month," +
+                        "calendar_week,day_of_week,card_position,title,summary,created_utc,updated_utc) VALUES(@id,@universe,@source,@type,@year," +
+                        "@month,@week,@day,@position,@title,@summary,@created,@updated);";
+                    AddParameter(command, "@id", segment.id); AddParameter(command, "@universe", segment.universeId);
+                    AddParameter(command, "@source", segment.sourceId); AddParameter(command, "@type", segment.sourceType);
+                    AddParameter(command, "@year", segment.year); AddParameter(command, "@month", segment.month); AddParameter(command, "@week", segment.week);
+                    AddParameter(command, "@day", segment.dayOfWeek); AddParameter(command, "@position", segment.cardPosition);
+                    AddParameter(command, "@title", segment.title); AddParameter(command, "@summary", segment.summary);
+                    AddParameter(command, "@created", segment.createdUtc); AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+                }
+                using (var command = CreateCommand(connection))
+                { command.Transaction = transaction; command.CommandText = "DELETE FROM booked_segment_participants WHERE segment_id=@id;"; AddParameter(command, "@id", segment.id); command.ExecuteNonQuery(); }
+                for (var index = 0; index < segment.participantIds.Count; index++)
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT INTO booked_segment_participants(segment_id,wrestler_id,position) VALUES(@segment,@wrestler,@position);";
+                    AddParameter(command, "@segment", segment.id); AddParameter(command, "@wrestler", segment.participantIds[index]);
+                    AddParameter(command, "@position", index); command.ExecuteNonQuery();
+                }
+                transaction.Commit();
+            }
+        }
+
+        public void DeleteBookedSegment(string segmentId)
+        {
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            { command.CommandText = "DELETE FROM booked_segments WHERE id=@id;"; AddParameter(command, "@id", segmentId); command.ExecuteNonQuery(); }
         }
 
         private SqliteConnection OpenConnection()
