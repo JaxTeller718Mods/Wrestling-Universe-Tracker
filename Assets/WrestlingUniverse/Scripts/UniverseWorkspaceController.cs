@@ -20,6 +20,14 @@ namespace WrestlingUniverse.UI
         [SerializeField] private GameObject rosterView;
         [SerializeField] private GameObject wrestlerCreationPanel;
         [SerializeField] private GameObject teamsView;
+        private GameObject rankingsView;
+        private Transform rankingsList;
+        private Text rankingsCountText;
+        private Text emptyRankingsText;
+        private Dropdown rankingsGenderDropdown;
+        private Dropdown rankingsDivisionDropdown;
+        private Dropdown rankingsBrandDropdown;
+        private bool suppressRankingFilters;
 
         private readonly Color activeNavigation = new Color32(25, 45, 65, 255);
         private readonly Color inactiveNavigation = new Color32(2, 4, 9, 255);
@@ -265,6 +273,12 @@ namespace WrestlingUniverse.UI
         private static readonly string[] Genders = { "Male", "Female", "Neutral" };
         private static readonly string[] Tiers = { "Lower Card", "Mid-Card", "Upper Card", "Main Event" };
 
+        private sealed class RankingEntry
+        {
+            public WrestlerRecord wrestler;
+            public CompetitionRecord record;
+        }
+
         private void Awake()
         {
             IncreaseExistingFontSizes(2);
@@ -328,6 +342,13 @@ namespace WrestlingUniverse.UI
             sectionContentText.gameObject.SetActive(false); titlesView.SetActive(true); RefreshTitleCards();
         }
 
+        public void ShowRankings()
+        {
+            SelectSection("RosterButton", "RANKINGS", string.Empty);
+            sectionContentText.gameObject.SetActive(false); rankingsView.SetActive(true);
+            PopulateRankingFilters(); RefreshRankings();
+        }
+
         public void ShowBrands()
         {
             ShowUniverseSetupView("BRANDS", brandsView);
@@ -386,6 +407,7 @@ namespace WrestlingUniverse.UI
             if (titlesView != null) titlesView.SetActive(false);
             if (titleCreationPanel != null) titleCreationPanel.SetActive(false);
             if (titleHistoryPanel != null) titleHistoryPanel.SetActive(false);
+            if (rankingsView != null) rankingsView.SetActive(false);
             if (brandsView != null) brandsView.SetActive(false);
             if (showsView != null) showsView.SetActive(false);
             if (specialsView != null) specialsView.SetActive(false);
@@ -433,6 +455,7 @@ namespace WrestlingUniverse.UI
             titlesView = CreateTitlesView(workspace);
             titleCreationPanel = CreateTitleCreationPanel(workspace);
             titleHistoryPanel = CreateTitleHistoryPanel(workspace);
+            rankingsView = CreateRankingsView(workspace);
             brandsView = CreateBrandsView(workspace);
             brandCreationPanel = CreateBrandCreationPanel(workspace);
             brandInfoPanel = CreateBrandInfoPanel(workspace);
@@ -450,6 +473,7 @@ namespace WrestlingUniverse.UI
             teamCreationPanel.SetActive(false);
             titlesView.SetActive(false); titleCreationPanel.SetActive(false);
             titleHistoryPanel.SetActive(false);
+            rankingsView.SetActive(false);
             brandsView.SetActive(false); showsView.SetActive(false); specialsView.SetActive(false); locationsView.SetActive(false);
             locationCreationPanel.SetActive(false);
             brandCreationPanel.SetActive(false); brandInfoPanel.SetActive(false);
@@ -1044,6 +1068,110 @@ namespace WrestlingUniverse.UI
                 20, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
                 new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
             return view;
+        }
+
+        private GameObject CreateRankingsView(Transform workspace)
+        {
+            var view = CreateRuntimePanel("RankingsView", workspace, new Color32(3, 9, 14, 255), Vector2.zero, Vector2.one);
+            var toolbar = CreateRuntimePanel("RankingsToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .80f), new Vector2(.98f, .97f));
+            rankingsCountText = CreateRuntimeText("RankingsCount", toolbar.transform, "RANKINGS  /  0", 18,
+                new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft, new Vector2(.025f, 0), new Vector2(.35f, 1), FontStyle.Bold);
+            rankingsGenderDropdown = CreateRuntimeDropdown("GenderFilter", toolbar.transform, "GENDER", new[] { "All Genders" }, 0,
+                new Vector2(.37f, .14f), new Vector2(.56f, .86f));
+            rankingsDivisionDropdown = CreateRuntimeDropdown("DivisionFilter", toolbar.transform, "DIVISION", new[] { "All Divisions" }, 0,
+                new Vector2(.58f, .14f), new Vector2(.77f, .86f));
+            rankingsBrandDropdown = CreateRuntimeDropdown("BrandFilter", toolbar.transform, "BRAND", new[] { "All Brands" }, 0,
+                new Vector2(.79f, .14f), new Vector2(.975f, .86f));
+            rankingsGenderDropdown.onValueChanged.AddListener(_ => { if (!suppressRankingFilters) RefreshRankings(); });
+            rankingsDivisionDropdown.onValueChanged.AddListener(_ => { if (!suppressRankingFilters) RefreshRankings(); });
+            rankingsBrandDropdown.onValueChanged.AddListener(_ => { if (!suppressRankingFilters) RefreshRankings(); });
+
+            var viewport = CreateRuntimePanel("RankingsTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .04f), new Vector2(.98f, .77f));
+            viewport.AddComponent<RectMask2D>();
+            var scroll = viewport.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 8f;
+            var content = new GameObject("RankingRows", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            content.transform.SetParent(viewport.transform, false); var contentRect = content.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(.02f, 1); contentRect.anchorMax = new Vector2(.98f, 1);
+            contentRect.pivot = new Vector2(.5f, 1); contentRect.anchoredPosition = new Vector2(0, -14); contentRect.sizeDelta = Vector2.zero;
+            var layout = content.GetComponent<VerticalLayoutGroup>(); layout.spacing = 10; layout.padding = new RectOffset(0, 0, 0, 16);
+            layout.childControlWidth = true; layout.childControlHeight = true; layout.childForceExpandWidth = true; layout.childForceExpandHeight = false;
+            content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.viewport = viewport.GetComponent<RectTransform>(); scroll.content = contentRect; rankingsList = content.transform;
+            emptyRankingsText = CreateRuntimeText("EmptyRankings", viewport.transform, "NO WRESTLERS MATCH THESE FILTERS", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+            return view;
+        }
+
+        private void PopulateRankingFilters()
+        {
+            suppressRankingFilters = true;
+            rankingsGenderDropdown.ClearOptions(); rankingsGenderDropdown.AddOptions(new List<string> { "All Genders", "Male", "Female", "Neutral" });
+            rankingsDivisionDropdown.ClearOptions(); rankingsDivisionDropdown.AddOptions(new List<string> { "All Divisions", "Lower Card", "Mid-Card", "Upper Card", "Main Event" });
+            var brands = new List<string> { "All Brands" };
+            foreach (var brand in repository.LoadBrands(ActiveUniverseSession.UniverseId)) brands.Add(brand.name);
+            rankingsBrandDropdown.ClearOptions(); rankingsBrandDropdown.AddOptions(brands);
+            rankingsGenderDropdown.value = 0; rankingsDivisionDropdown.value = 0; rankingsBrandDropdown.value = 0;
+            rankingsGenderDropdown.RefreshShownValue(); rankingsDivisionDropdown.RefreshShownValue(); rankingsBrandDropdown.RefreshShownValue();
+            suppressRankingFilters = false;
+        }
+
+        private void RefreshRankings()
+        {
+            if (repository == null || rankingsList == null) return;
+            for (var index = rankingsList.childCount - 1; index >= 0; index--)
+            { var oldRow = rankingsList.GetChild(index).gameObject; oldRow.SetActive(false); Destroy(oldRow); }
+            var gender = rankingsGenderDropdown.options[rankingsGenderDropdown.value].text;
+            var division = rankingsDivisionDropdown.options[rankingsDivisionDropdown.value].text;
+            var brand = rankingsBrandDropdown.options[rankingsBrandDropdown.value].text;
+            var entries = new List<RankingEntry>();
+            foreach (var wrestler in repository.LoadWrestlers(ActiveUniverseSession.UniverseId))
+            {
+                if (gender != "All Genders" && wrestler.gender != gender) continue;
+                if (division != "All Divisions" && wrestler.tier != division) continue;
+                if (brand != "All Brands" && wrestler.brand != brand) continue;
+                entries.Add(new RankingEntry { wrestler = wrestler,
+                    record = repository.GetWrestlerCompetitionRecord(ActiveUniverseSession.UniverseId, wrestler.id) });
+            }
+            entries.Sort((left, right) =>
+            {
+                var leftMatches = left.record.wins + left.record.losses + left.record.draws;
+                var rightMatches = right.record.wins + right.record.losses + right.record.draws;
+                var leftRate = leftMatches == 0 ? 0d : (left.record.wins + left.record.draws * .5d) / leftMatches;
+                var rightRate = rightMatches == 0 ? 0d : (right.record.wins + right.record.draws * .5d) / rightMatches;
+                var comparison = rightRate.CompareTo(leftRate); if (comparison != 0) return comparison;
+                comparison = right.record.wins.CompareTo(left.record.wins); if (comparison != 0) return comparison;
+                comparison = left.record.losses.CompareTo(right.record.losses); if (comparison != 0) return comparison;
+                comparison = right.wrestler.overall.CompareTo(left.wrestler.overall); if (comparison != 0) return comparison;
+                return string.Compare(left.wrestler.name, right.wrestler.name, StringComparison.OrdinalIgnoreCase);
+            });
+            rankingsCountText.text = "RANKINGS  /  " + entries.Count; emptyRankingsText.gameObject.SetActive(entries.Count == 0);
+            for (var index = 0; index < entries.Count; index++) CreateRankingRow(entries[index], index + 1);
+            Canvas.ForceUpdateCanvases();
+        }
+
+        private void CreateRankingRow(RankingEntry entry, int rank)
+        {
+            var accent = rank == 1 ? new Color32(240, 190, 42, 255) : rank == 2 ? new Color32(185, 195, 210, 255) :
+                rank == 3 ? new Color32(199, 111, 55, 255) : new Color32(45, 190, 230, 255);
+            var row = CreateRuntimePanel("Rank_" + rank + "_" + entry.wrestler.id, rankingsList,
+                rank <= 3 ? new Color32(16, 20, 30, 255) : new Color32(9, 15, 27, 255), Vector2.zero, Vector2.one);
+            row.AddComponent<LayoutElement>().preferredHeight = 108;
+            CreateRuntimeText("Rank", row.transform, rank == 1 ? "#1  CROWN" : "#" + rank, 18, accent, TextAnchor.MiddleCenter,
+                new Vector2(.015f, .10f), new Vector2(.08f, .90f), FontStyle.Bold);
+            var portraitFrame = CreateRuntimePanel("PortraitFrame", row.transform, new Color32(10, 27, 39, 255), new Vector2(.085f, .08f), new Vector2(.16f, .92f));
+            portraitFrame.GetComponent<Image>().color = accent;
+            var texture = UniverseImageStorage.LoadTexture(entry.wrestler.photoPath);
+            if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(portraitFrame.transform, "Portrait", texture, new Vector2(.04f, .04f), new Vector2(.96f, .96f)); }
+            CreateRuntimeText("Name", row.transform, entry.wrestler.name.ToUpperInvariant(), 19, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.18f, .43f), new Vector2(.58f, .86f), FontStyle.Bold);
+            CreateRuntimeText("Details", row.transform, entry.wrestler.brand.ToUpperInvariant() + "  /  " + entry.wrestler.disposition.ToUpperInvariant() +
+                "  /  " + entry.wrestler.tier.ToUpperInvariant(), 12, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.18f, .14f), new Vector2(.66f, .45f), FontStyle.Bold);
+            CreateRuntimeText("RecordLabel", row.transform, "W - L - D", 11, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.78f, .56f), new Vector2(.97f, .83f), FontStyle.Bold);
+            CreateRuntimeText("Record", row.transform, entry.record.ToString(), 24, accent, TextAnchor.MiddleCenter,
+                new Vector2(.78f, .17f), new Vector2(.97f, .58f), FontStyle.Bold);
         }
 
         private GameObject CreateWrestlerCreationPanel(Transform workspace)
@@ -2770,17 +2898,20 @@ namespace WrestlingUniverse.UI
             if (rosterButton == null || rosterButton.Find("RosterDropdown") != null) return;
 
             var menu = CreateRuntimePanel("RosterDropdown", rosterButton, new Color32(5, 9, 20, 255),
-                new Vector2(0, -2.25f), new Vector2(1, 0));
+                new Vector2(0, -2.9f), new Vector2(1, 0));
             menu.transform.SetAsLastSibling();
             var rosterItem = CreateRuntimeButton("RosterMenuItem", menu.transform, "ROSTER",
-                new Vector2(0, .69f), new Vector2(1, .97f), new Color32(9, 15, 29, 255), Color.white);
+                new Vector2(0, .76f), new Vector2(1, .98f), new Color32(9, 15, 29, 255), Color.white);
             rosterItem.onClick.AddListener(ShowRoster);
             var teamsItem = CreateRuntimeButton("TeamsMenuItem", menu.transform, "TEAMS",
-                new Vector2(0, .36f), new Vector2(1, .64f), new Color32(9, 15, 29, 255), Color.white);
+                new Vector2(0, .51f), new Vector2(1, .73f), new Color32(9, 15, 29, 255), Color.white);
             teamsItem.onClick.AddListener(ShowTeams);
             var titlesItem = CreateRuntimeButton("TitlesMenuItem", menu.transform, "TITLES",
-                new Vector2(0, .03f), new Vector2(1, .31f), new Color32(9, 15, 29, 255), Color.white);
+                new Vector2(0, .26f), new Vector2(1, .48f), new Color32(9, 15, 29, 255), Color.white);
             titlesItem.onClick.AddListener(ShowTitles);
+            var rankingsItem = CreateRuntimeButton("RankingsMenuItem", menu.transform, "RANKINGS",
+                new Vector2(0, .01f), new Vector2(1, .23f), new Color32(9, 15, 29, 255), Color.white);
+            rankingsItem.onClick.AddListener(ShowRankings);
 
             var hover = rosterButton.gameObject.AddComponent<NavigationHoverDropdown>();
             hover.Configure(menu);
