@@ -36,6 +36,7 @@ namespace WrestlingUniverse.UI
         private Transform wrestlerGrid;
         private Text emptyRosterText;
         private Text rosterCountText;
+        private Text rosterTransferStatusText;
         private InputField wrestlerNameInput;
         private InputField overallInput;
         private Dropdown brandDropdown;
@@ -1090,9 +1091,17 @@ namespace WrestlingUniverse.UI
             var view = CreateRuntimePanel("RosterView", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
             var toolbar = CreateRuntimePanel("RosterToolbar", view.transform, new Color32(12, 21, 37, 255), new Vector2(.02f, .79f), new Vector2(.98f, .96f));
             rosterCountText = CreateRuntimeText("RosterCount", toolbar.transform, "SIGNED TALENT  /  0", 17, new Color32(45, 190, 230, 255),
-                TextAnchor.MiddleLeft, new Vector2(.025f, 0), new Vector2(.65f, 1), FontStyle.Bold);
+                TextAnchor.MiddleLeft, new Vector2(.025f, .40f), new Vector2(.42f, 1), FontStyle.Bold);
+            rosterTransferStatusText = CreateRuntimeText("TransferStatus", toolbar.transform, string.Empty, 11, new Color32(142, 160, 181, 255),
+                TextAnchor.MiddleLeft, new Vector2(.025f, .02f), new Vector2(.42f, .44f), FontStyle.Bold);
+            var exportButton = CreateRuntimeButton("ExportRosterButton", toolbar.transform, "EXPORT",
+                new Vector2(.43f, .16f), new Vector2(.555f, .84f), new Color32(25, 45, 65, 255), Color.white);
+            exportButton.onClick.AddListener(ExportRosterPackage);
+            var importButton = CreateRuntimeButton("ImportRosterButton", toolbar.transform, "IMPORT",
+                new Vector2(.565f, .16f), new Vector2(.69f, .84f), new Color32(25, 45, 65, 255), Color.white);
+            importButton.onClick.AddListener(ImportRosterPackage);
             var signButton = CreateRuntimeButton("SignWrestlerButton", toolbar.transform, "+  SIGN WRESTLER",
-                new Vector2(.76f, .16f), new Vector2(.975f, .84f), new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255));
+                new Vector2(.70f, .16f), new Vector2(.975f, .84f), new Color32(240, 190, 42, 255), new Color32(5, 9, 20, 255));
             signButton.onClick.AddListener(ShowWrestlerCreation);
 
             var viewport = CreateRuntimePanel("RosterTable", view.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .05f), new Vector2(.98f, .74f));
@@ -2911,6 +2920,108 @@ namespace WrestlingUniverse.UI
             selectedWrestlerPhotoPath = path;
             wrestlerPhotoStatus.text = System.IO.Path.GetFileName(path);
             SetRuntimePhoto(wrestlerPhotoHost.transform, "PhotoPreview", texture, new Vector2(.06f, .31f), new Vector2(.94f, .94f));
+        }
+
+        private void ExportRosterPackage()
+        {
+            try
+            {
+                var wrestlers = repository.LoadWrestlers(ActiveUniverseSession.UniverseId);
+                var teams = repository.LoadTeams(ActiveUniverseSession.UniverseId);
+                if (wrestlers.Count == 0 && teams.Count == 0) { SetRosterTransferStatus("There is no roster or team data to export.", false); return; }
+                string path;
+                if (!WindowsImageFilePicker.TryChooseRosterExportPath("WrestlingUniverseRoster_" + DateTime.Now.ToString("yyyyMMdd"), out path)) return;
+                RosterTransferService.Export(path, wrestlers, teams);
+                SetRosterTransferStatus("Exported " + wrestlers.Count + " wrestlers and " + teams.Count + " teams.", true);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception); SetRosterTransferStatus("Roster export failed. Check the Console.", false);
+            }
+        }
+
+        private void ImportRosterPackage()
+        {
+            try
+            {
+                string path; if (!WindowsImageFilePicker.TryPickRosterPackage(out path)) return;
+                var package = RosterTransferService.Import(path);
+                ValidateRosterPackage(package);
+                var wrestlerImages = new Dictionary<string, byte[]>();
+                foreach (var item in package.wrestlers) wrestlerImages[item.sourceId] = RosterTransferService.DecodeImage(item.imageBase64);
+                var teamImages = new Dictionary<string, byte[]>();
+                foreach (var item in package.teams) teamImages[item.sourceId] = RosterTransferService.DecodeImage(item.imageBase64);
+
+                var idMap = new Dictionary<string, string>(); var importedAt = DateTime.UtcNow.ToString("O");
+                foreach (var item in package.wrestlers)
+                {
+                    var newId = Guid.NewGuid().ToString("N"); idMap.Add(item.sourceId, newId);
+                    var wrestler = new WrestlerRecord { id = newId, universeId = ActiveUniverseSession.UniverseId, name = item.name.Trim(),
+                        brand = "Unassigned", disposition = item.disposition, gender = item.gender, tier = item.tier,
+                        overall = item.overall, createdUtc = importedAt };
+                    var image = wrestlerImages[item.sourceId];
+                    if (image != null) wrestler.photoPath = UniverseImageStorage.ImportBytes(wrestler.universeId, image, item.imageExtension, "wrestler_" + newId);
+                    repository.SaveWrestler(wrestler);
+                }
+                foreach (var item in package.teams)
+                {
+                    var newId = Guid.NewGuid().ToString("N"); var memberIds = new List<string>();
+                    foreach (var sourceMemberId in item.memberSourceIds) memberIds.Add(idMap[sourceMemberId]);
+                    var team = new TeamRecord { id = newId, universeId = ActiveUniverseSession.UniverseId, name = item.name.Trim(),
+                        brand = "Unassigned", disposition = item.disposition, memberIds = memberIds, createdUtc = importedAt };
+                    var image = teamImages[item.sourceId];
+                    if (image != null) team.photoPath = UniverseImageStorage.ImportBytes(team.universeId, image, item.imageExtension, "team_" + newId);
+                    repository.SaveTeam(team);
+                }
+                RefreshRosterCards(); SetRosterTransferStatus("Imported " + package.wrestlers.Count + " wrestlers and " + package.teams.Count + " teams.", true);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception); SetRosterTransferStatus("Roster import failed. The package may be invalid. Check the Console.", false);
+            }
+        }
+
+        private static void ValidateRosterPackage(RosterTransferPackage package)
+        {
+            var wrestlerIds = new HashSet<string>();
+            foreach (var wrestler in package.wrestlers)
+            {
+                if (string.IsNullOrWhiteSpace(wrestler.sourceId) || !wrestlerIds.Add(wrestler.sourceId))
+                    throw new InvalidOperationException("The package contains a missing or duplicate wrestler identifier.");
+                if (string.IsNullOrWhiteSpace(wrestler.name) || Array.IndexOf(Dispositions, wrestler.disposition) < 0 ||
+                    Array.IndexOf(Genders, wrestler.gender) < 0 || Array.IndexOf(Tiers, wrestler.tier) < 0 || wrestler.overall < 1 || wrestler.overall > 100)
+                    throw new InvalidOperationException("The package contains invalid wrestler data.");
+                ValidateTransferImage(wrestler.imageBase64, wrestler.imageExtension);
+            }
+            var teamIds = new HashSet<string>();
+            foreach (var team in package.teams)
+            {
+                if (string.IsNullOrWhiteSpace(team.sourceId) || !teamIds.Add(team.sourceId) || string.IsNullOrWhiteSpace(team.name) ||
+                    Array.IndexOf(Dispositions, team.disposition) < 0)
+                    throw new InvalidOperationException("The package contains invalid team data.");
+                if (team.memberSourceIds == null) team.memberSourceIds = new List<string>();
+                if (team.memberSourceIds.Count > 5) throw new InvalidOperationException("An imported team has more than five members.");
+                var uniqueMembers = new HashSet<string>();
+                foreach (var memberId in team.memberSourceIds)
+                    if (!wrestlerIds.Contains(memberId) || !uniqueMembers.Add(memberId))
+                        throw new InvalidOperationException("An imported team contains an invalid member.");
+                ValidateTransferImage(team.imageBase64, team.imageExtension);
+            }
+        }
+
+        private static void ValidateTransferImage(string imageBase64, string extension)
+        {
+            if (string.IsNullOrEmpty(imageBase64)) return;
+            extension = (extension ?? string.Empty).ToLowerInvariant();
+            if (extension != ".png" && extension != ".jpg" && extension != ".jpeg" && extension != ".bmp")
+                throw new InvalidOperationException("The package contains an unsupported image type.");
+        }
+
+        private void SetRosterTransferStatus(string message, bool success)
+        {
+            if (rosterTransferStatusText == null) return;
+            rosterTransferStatusText.text = message;
+            rosterTransferStatusText.color = success ? new Color32(98, 220, 135, 255) : new Color32(255, 105, 105, 255);
         }
 
         private void SaveWrestler()
