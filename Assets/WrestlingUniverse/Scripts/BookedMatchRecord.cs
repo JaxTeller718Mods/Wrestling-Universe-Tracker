@@ -19,6 +19,7 @@ namespace WrestlingUniverse.UI
         public string format;
         public string titleId;
         public string titleName;
+        public string titleImagePath;
         public string stageOneStipulation;
         public string stageTwoStipulation;
         public string stageThreeStipulation;

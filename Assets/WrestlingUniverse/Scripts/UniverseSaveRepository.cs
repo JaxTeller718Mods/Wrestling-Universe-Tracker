@@ -10,7 +10,7 @@ namespace WrestlingUniverse.Persistence
     /// <summary>Owns the local SQLite database used by all universe saves.</summary>
     public sealed class UniverseSaveRepository
     {
-        private const int CurrentSchemaVersion = 17;
+        private const int CurrentSchemaVersion = 18;
         private readonly string connectionString;
 
         public string DatabasePath { get; }
@@ -61,6 +61,14 @@ namespace WrestlingUniverse.Persistence
                     "FOREIGN KEY(holder_wrestler_id) REFERENCES wrestlers(id) ON DELETE SET NULL);");
                 EnsureColumn(connection, transaction, "titles", "division", "TEXT NOT NULL DEFAULT 'Men''s'");
                 Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_titles_universe ON titles(universe_id, name);");
+                Execute(connection, transaction,
+                    "CREATE TABLE IF NOT EXISTS title_reigns (id TEXT PRIMARY KEY NOT NULL, title_id TEXT NOT NULL, universe_id TEXT NOT NULL, " +
+                    "reign_number INTEGER NOT NULL, holder_wrestler_id TEXT, holder_name TEXT NOT NULL, won_match_id TEXT NOT NULL UNIQUE, " +
+                    "won_show_name TEXT NOT NULL, won_year INTEGER NOT NULL, won_month TEXT NOT NULL, won_week INTEGER NOT NULL, won_day_of_week TEXT NOT NULL, " +
+                    "lost_show_name TEXT, lost_year INTEGER, lost_month TEXT, lost_week INTEGER, lost_day_of_week TEXT, created_utc TEXT NOT NULL, " +
+                    "FOREIGN KEY(title_id) REFERENCES titles(id) ON DELETE CASCADE, FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE, " +
+                    "FOREIGN KEY(holder_wrestler_id) REFERENCES wrestlers(id) ON DELETE SET NULL, UNIQUE(title_id,reign_number));");
+                Execute(connection, transaction, "CREATE INDEX IF NOT EXISTS idx_title_reigns_title ON title_reigns(title_id,reign_number DESC);");
                 Execute(connection, transaction,
                     "CREATE TABLE IF NOT EXISTS locations (id TEXT PRIMARY KEY NOT NULL, universe_id TEXT NOT NULL, venue_name TEXT NOT NULL, " +
                     "venue_location TEXT NOT NULL, capacity INTEGER NOT NULL CHECK(capacity >= 0), created_utc TEXT NOT NULL, updated_utc TEXT NOT NULL, " +
@@ -373,8 +381,11 @@ namespace WrestlingUniverse.Persistence
             using (var connection = OpenConnection())
             using (var command = CreateCommand(connection))
             {
-                command.CommandText = "INSERT OR REPLACE INTO titles(id, universe_id, name, brand, division, holder_wrestler_id, image_path, created_utc, updated_utc) " +
-                                      "VALUES(@id, @universeId, @name, @brand, @division, @holder, @image, @created, @updated);";
+                command.CommandText = "INSERT INTO titles(id, universe_id, name, brand, division, holder_wrestler_id, image_path, created_utc, updated_utc) " +
+                    "VALUES(@id,@universeId,@name,@brand,@division,@holder,@image,@created,@updated) " +
+                    "ON CONFLICT(id) DO UPDATE SET name=excluded.name,brand=excluded.brand,division=excluded.division," +
+                    "holder_wrestler_id=CASE WHEN EXISTS(SELECT 1 FROM title_reigns WHERE title_id=excluded.id) " +
+                    "THEN titles.holder_wrestler_id ELSE excluded.holder_wrestler_id END,image_path=excluded.image_path,updated_utc=excluded.updated_utc;";
                 AddParameter(command, "@id", title.id); AddParameter(command, "@universeId", title.universeId);
                 AddParameter(command, "@name", title.name); AddParameter(command, "@brand", title.brand);
                 AddParameter(command, "@division", title.division);
@@ -571,6 +582,28 @@ namespace WrestlingUniverse.Persistence
             }
         }
 
+        public List<UI.TitleReignRecord> LoadTitleReigns(string titleId)
+        {
+            var results = new List<UI.TitleReignRecord>();
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT id,title_id,holder_wrestler_id,holder_name,reign_number,won_show_name,won_year,won_month,won_week,won_day_of_week," +
+                    "lost_show_name,lost_year,lost_month,lost_week,lost_day_of_week FROM title_reigns WHERE title_id=@title ORDER BY reign_number DESC;";
+                AddParameter(command, "@title", titleId);
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) results.Add(new UI.TitleReignRecord {
+                        id = reader.GetString(0), titleId = reader.GetString(1), holderWrestlerId = ReadNullableString(reader, 2),
+                        holderName = reader.GetString(3), reignNumber = reader.GetInt32(4), wonShowName = reader.GetString(5),
+                        wonYear = reader.GetInt32(6), wonMonth = reader.GetString(7), wonWeek = reader.GetInt32(8), wonDayOfWeek = reader.GetString(9),
+                        lostShowName = ReadNullableString(reader, 10), lostYear = reader.IsDBNull(11) ? (int?)null : reader.GetInt32(11),
+                        lostMonth = ReadNullableString(reader, 12), lostWeek = reader.IsDBNull(13) ? (int?)null : reader.GetInt32(13),
+                        lostDayOfWeek = ReadNullableString(reader, 14)
+                    });
+            }
+            return results;
+        }
+
         public List<UI.BookedMatchRecord> LoadBookedMatches(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
         {
             var results = new List<UI.BookedMatchRecord>();
@@ -578,7 +611,7 @@ namespace WrestlingUniverse.Persistence
             using (var command = CreateCommand(connection))
             {
                 command.CommandText = "SELECT m.id, m.universe_id, m.source_id, m.source_type, m.calendar_year, m.calendar_month, m.calendar_week, " +
-                    "m.day_of_week, m.card_position, m.stipulation, m.format, COALESCE(m.title_id, ''), COALESCE(t.name, ''), " +
+                    "m.day_of_week, m.card_position, m.stipulation, m.format, COALESCE(m.title_id, ''), COALESCE(t.name, ''), COALESCE(t.image_path, ''), " +
                     "COALESCE(m.stage_one_stipulation, ''), COALESCE(m.stage_two_stipulation, ''), COALESCE(m.stage_three_stipulation, ''), m.created_utc " +
                     "FROM booked_matches m LEFT JOIN titles t ON t.id = m.title_id WHERE m.universe_id=@universe AND m.source_id=@source " +
                     "AND m.calendar_year=@year AND m.calendar_month=@month AND m.calendar_week=@week AND m.day_of_week=@day ORDER BY m.card_position;";
@@ -588,8 +621,8 @@ namespace WrestlingUniverse.Persistence
                     id = reader.GetString(0), universeId = reader.GetString(1), sourceId = reader.GetString(2), sourceType = reader.GetString(3),
                     year = reader.GetInt32(4), month = reader.GetString(5), week = reader.GetInt32(6), dayOfWeek = reader.GetString(7),
                     cardPosition = reader.GetInt32(8), stipulation = reader.GetString(9), format = reader.GetString(10), titleId = reader.GetString(11),
-                    titleName = reader.GetString(12), stageOneStipulation = reader.GetString(13), stageTwoStipulation = reader.GetString(14),
-                    stageThreeStipulation = reader.GetString(15), createdUtc = reader.GetString(16) });
+                    titleName = reader.GetString(12), titleImagePath = reader.GetString(13), stageOneStipulation = reader.GetString(14),
+                    stageTwoStipulation = reader.GetString(15), stageThreeStipulation = reader.GetString(16), createdUtc = reader.GetString(17) });
             }
             var wrestlers = LoadWrestlers(universeId);
             foreach (var match in results)
@@ -826,16 +859,78 @@ namespace WrestlingUniverse.Persistence
             }
         }
 
-        public void FinalizeShowResults(string universeId, string sourceId, int year, string month, int week, string dayOfWeek)
+        public void FinalizeShowResults(string universeId, string sourceId, string sourceName, int year, string month, int week, string dayOfWeek)
         {
             using (var connection = OpenConnection())
-            using (var command = CreateCommand(connection))
+            using (var transaction = connection.BeginTransaction())
             {
-                command.CommandText = "UPDATE booked_show_cards SET is_locked=1,results_finalized=1,updated_utc=@updated WHERE universe_id=@universe " +
-                    "AND source_id=@source AND calendar_year=@year AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day;";
-                AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); AddParameter(command, "@universe", universeId);
-                AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year); AddParameter(command, "@month", month);
-                AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek); command.ExecuteNonQuery();
+                var titleChanges = new List<Tuple<string, string, string>>();
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "SELECT m.id,m.title_id,r.winner_wrestler_id FROM booked_matches m JOIN booked_match_results r ON r.match_id=m.id " +
+                        "WHERE m.universe_id=@universe AND m.source_id=@source AND m.calendar_year=@year AND m.calendar_month=@month " +
+                        "AND m.calendar_week=@week AND m.day_of_week=@day AND m.title_id IS NOT NULL AND m.title_id<>'' " +
+                        "AND r.title_changed=1 AND r.is_draw=0 ORDER BY m.card_position;";
+                    AddParameter(command, "@universe", universeId); AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year);
+                    AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                    using (var reader = command.ExecuteReader()) while (reader.Read())
+                        titleChanges.Add(Tuple.Create(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+                }
+
+                foreach (var change in titleChanges)
+                {
+                    string currentHolder = null; string winnerName = null; var alreadyApplied = false;
+                    using (var command = CreateCommand(connection))
+                    {
+                        command.Transaction = transaction;
+                        command.CommandText = "SELECT EXISTS(SELECT 1 FROM title_reigns WHERE won_match_id=@match)," +
+                            "(SELECT holder_wrestler_id FROM titles WHERE id=@title),(SELECT name FROM wrestlers WHERE id=@winner);";
+                        AddParameter(command, "@match", change.Item1); AddParameter(command, "@title", change.Item2); AddParameter(command, "@winner", change.Item3);
+                        using (var reader = command.ExecuteReader()) if (reader.Read()) {
+                            alreadyApplied = reader.GetInt32(0) != 0; currentHolder = ReadNullableString(reader, 1); winnerName = ReadNullableString(reader, 2);
+                        }
+                    }
+                    if (alreadyApplied || string.IsNullOrEmpty(winnerName) || currentHolder == change.Item3) continue;
+
+                    using (var command = CreateCommand(connection))
+                    {
+                        command.Transaction = transaction;
+                        command.CommandText = "UPDATE title_reigns SET lost_show_name=@show,lost_year=@year,lost_month=@month,lost_week=@week,lost_day_of_week=@day " +
+                            "WHERE title_id=@title AND lost_year IS NULL;";
+                        AddParameter(command, "@show", sourceName); AddParameter(command, "@year", year); AddParameter(command, "@month", month);
+                        AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek); AddParameter(command, "@title", change.Item2); command.ExecuteNonQuery();
+                    }
+                    using (var command = CreateCommand(connection))
+                    {
+                        command.Transaction = transaction;
+                        command.CommandText = "INSERT INTO title_reigns(id,title_id,universe_id,reign_number,holder_wrestler_id,holder_name,won_match_id," +
+                            "won_show_name,won_year,won_month,won_week,won_day_of_week,created_utc) VALUES(@id,@title,@universe," +
+                            "COALESCE((SELECT MAX(reign_number)+1 FROM title_reigns WHERE title_id=@title),1),@winner,@name,@match,@show,@year,@month,@week,@day,@created);";
+                        AddParameter(command, "@id", Guid.NewGuid().ToString("N")); AddParameter(command, "@title", change.Item2);
+                        AddParameter(command, "@universe", universeId); AddParameter(command, "@winner", change.Item3); AddParameter(command, "@name", winnerName);
+                        AddParameter(command, "@match", change.Item1); AddParameter(command, "@show", sourceName); AddParameter(command, "@year", year);
+                        AddParameter(command, "@month", month); AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek);
+                        AddParameter(command, "@created", DateTime.UtcNow.ToString("O")); command.ExecuteNonQuery();
+                    }
+                    using (var command = CreateCommand(connection))
+                    {
+                        command.Transaction = transaction; command.CommandText = "UPDATE titles SET holder_wrestler_id=@winner,updated_utc=@updated WHERE id=@title;";
+                        AddParameter(command, "@winner", change.Item3); AddParameter(command, "@updated", DateTime.UtcNow.ToString("O"));
+                        AddParameter(command, "@title", change.Item2); command.ExecuteNonQuery();
+                    }
+                }
+
+                using (var command = CreateCommand(connection))
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "UPDATE booked_show_cards SET is_locked=1,results_finalized=1,updated_utc=@updated WHERE universe_id=@universe " +
+                        "AND source_id=@source AND calendar_year=@year AND calendar_month=@month AND calendar_week=@week AND day_of_week=@day;";
+                    AddParameter(command, "@updated", DateTime.UtcNow.ToString("O")); AddParameter(command, "@universe", universeId);
+                    AddParameter(command, "@source", sourceId); AddParameter(command, "@year", year); AddParameter(command, "@month", month);
+                    AddParameter(command, "@week", week); AddParameter(command, "@day", dayOfWeek); command.ExecuteNonQuery();
+                }
+                transaction.Commit();
             }
         }
 

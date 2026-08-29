@@ -89,6 +89,10 @@ namespace WrestlingUniverse.UI
         private static readonly string[] TitleDivisions = { "Men's", "Women's", "Tag Team" };
         private GameObject titleHistoryPanel;
         private Text titleHistoryNameText;
+        private Text titleHistoryChampionText;
+        private GameObject titleHistoryChampionImage;
+        private Transform titleHistoryList;
+        private Text titleHistoryEmptyText;
         private GameObject brandsView;
         private GameObject showsView;
         private GameObject specialsView;
@@ -163,6 +167,12 @@ namespace WrestlingUniverse.UI
         private Text calendarHeadingText;
         private int calendarYear = DateTime.Now.Year;
         private readonly List<Transform> calendarCells = new List<Transform>();
+        private GameObject bookingDashboardPanel;
+        private GameObject bookingDashboardImageHost;
+        private Text bookingDashboardNameText;
+        private Text bookingDashboardScheduleText;
+        private Text bookingDashboardEmptyText;
+        private Button bookingDashboardOpenButton;
         private GameObject showBookingPanel;
         private Text bookingShowNameText;
         private Text bookingScheduleText;
@@ -200,6 +210,7 @@ namespace WrestlingUniverse.UI
         private Dropdown matchStageTwoDropdown;
         private Dropdown matchStageThreeDropdown;
         private GameObject matchParticipantMenu;
+        private RectTransform matchParticipantContent;
         private Button matchParticipantSelector;
         private Text matchParticipantCaption;
         private readonly List<string> selectedMatchParticipantIds = new List<string>();
@@ -377,8 +388,13 @@ namespace WrestlingUniverse.UI
             view.SetActive(true);
         }
 
-        public void ShowBooking() => SelectSection("BookingButton", "BOOKING",
-            "BOOKING CENTER\n\nShows, events, matches, and segments will be created here.");
+        public void ShowBooking()
+        {
+            SelectSection("BookingButton", "BOOKING", string.Empty);
+            sectionContentText.gameObject.SetActive(false);
+            bookingDashboardPanel.SetActive(true);
+            RefreshBookingDashboard();
+        }
 
         public void ShowCalendar()
         {
@@ -418,6 +434,7 @@ namespace WrestlingUniverse.UI
             if (tvShowCreationPanel != null) tvShowCreationPanel.SetActive(false);
             if (specialCreationPanel != null) specialCreationPanel.SetActive(false);
             if (calendarView != null) calendarView.SetActive(false);
+            if (bookingDashboardPanel != null) bookingDashboardPanel.SetActive(false);
             if (showBookingPanel != null) showBookingPanel.SetActive(false);
             var navigation = sectionTitleText.transform.root.Find("Background/WorkspaceNavigation");
             if (navigation == null) return;
@@ -464,6 +481,7 @@ namespace WrestlingUniverse.UI
             specialsView = CreateSpecialsView(workspace);
             specialCreationPanel = CreateSpecialCreationPanel(workspace);
             calendarView = CreateCalendarView(workspace);
+            bookingDashboardPanel = CreateBookingDashboardPanel(workspace);
             showBookingPanel = CreateShowBookingPanel(workspace);
             locationsView = CreateLocationsView(workspace);
             locationCreationPanel = CreateLocationCreationPanel(workspace);
@@ -480,6 +498,7 @@ namespace WrestlingUniverse.UI
             tvShowCreationPanel.SetActive(false);
             specialCreationPanel.SetActive(false);
             calendarView.SetActive(false);
+            bookingDashboardPanel.SetActive(false);
             showBookingPanel.SetActive(false);
         }
 
@@ -781,7 +800,16 @@ namespace WrestlingUniverse.UI
             matchParticipantMenu = CreateRuntimePanel("MatchParticipantDropdown", participantSelector.transform, new Color32(5, 9, 20, 255),
                 new Vector2(0, 1f), new Vector2(1, 3.2f));
             var participantCanvas = matchParticipantMenu.AddComponent<Canvas>(); participantCanvas.overrideSorting = true; participantCanvas.sortingOrder = 500;
-            matchParticipantMenu.AddComponent<GraphicRaycaster>(); matchParticipantMenu.SetActive(false);
+            matchParticipantMenu.AddComponent<GraphicRaycaster>(); matchParticipantMenu.AddComponent<RectMask2D>();
+            var participantScroll = matchParticipantMenu.AddComponent<ScrollRect>(); participantScroll.horizontal = false; participantScroll.vertical = true;
+            participantScroll.movementType = ScrollRect.MovementType.Clamped; participantScroll.scrollSensitivity = 8f;
+            var participantContentObject = new GameObject("ParticipantContent", typeof(RectTransform));
+            participantContentObject.transform.SetParent(matchParticipantMenu.transform, false);
+            matchParticipantContent = participantContentObject.GetComponent<RectTransform>();
+            matchParticipantContent.anchorMin = new Vector2(0, 1); matchParticipantContent.anchorMax = new Vector2(1, 1);
+            matchParticipantContent.pivot = new Vector2(.5f, 1); matchParticipantContent.anchoredPosition = Vector2.zero;
+            participantScroll.viewport = matchParticipantMenu.GetComponent<RectTransform>(); participantScroll.content = matchParticipantContent;
+            matchParticipantMenu.SetActive(false);
             matchStagesGroup = CreateRuntimePanel("ThreeStagesSelectors", matchBookingBody.transform, new Color32(8, 15, 27, 0),
                 new Vector2(.035f, .155f), new Vector2(.965f, .34f));
             matchStageOneDropdown = CreateRuntimeDropdown("StageOne", matchStagesGroup.transform, "STAGE 1", ThreeStagesOfHellOptions, 0,
@@ -1014,17 +1042,45 @@ namespace WrestlingUniverse.UI
         private GameObject CreateTitleHistoryPanel(Transform workspace)
         {
             var panel = CreateRuntimePanel("TitleHistoryPanel", workspace, new Color32(9, 15, 29, 255), Vector2.zero, Vector2.one);
-            CreateRuntimeText("Eyebrow", panel.transform, "CHAMPIONSHIP HISTORY", 14, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
-                new Vector2(.04f, .78f), new Vector2(.62f, .94f), FontStyle.Bold);
+            CreateRuntimeText("Eyebrow", panel.transform, "CHAMPIONSHIP INFO", 14, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.04f, .84f), new Vector2(.62f, .96f), FontStyle.Bold);
             titleHistoryNameText = CreateRuntimeText("TitleName", panel.transform, "TITLE HISTORY", 29, Color.white, TextAnchor.MiddleLeft,
-                new Vector2(.04f, .64f), new Vector2(.72f, .82f), FontStyle.Bold);
-            var back = CreateRuntimeButton("BackToTitlesButton", panel.transform, "BACK TO TITLES", new Vector2(.80f, .80f), new Vector2(.965f, .94f),
+                new Vector2(.04f, .73f), new Vector2(.72f, .86f), FontStyle.Bold);
+            var back = CreateRuntimeButton("BackToTitlesButton", panel.transform, "BACK TO TITLES", new Vector2(.80f, .83f), new Vector2(.965f, .95f),
                 new Color32(25, 45, 65, 255), Color.white); back.onClick.AddListener(ShowTitles);
-            var historyTable = CreateRuntimePanel("HistoryTable", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.04f, .08f), new Vector2(.96f, .59f));
-            CreateRuntimeText("EmptyHistory", historyTable.transform,
-                "NO TITLE HISTORY RECORDED\n\nChampionship reigns, holders, victories, vacancies, and dates will appear here.",
-                20, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
-                new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
+
+            var championPanel = CreateRuntimePanel("CurrentChampion", panel.transform, new Color32(12, 21, 37, 255), new Vector2(.04f, .57f), new Vector2(.96f, .71f));
+            titleHistoryChampionImage = CreateRuntimePanel("ChampionImage", championPanel.transform, new Color32(5, 11, 23, 255), new Vector2(.02f, .10f), new Vector2(.10f, .90f));
+            CreateRuntimeText("CurrentLabel", championPanel.transform, "CURRENT CHAMPION", 13, new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                new Vector2(.12f, .52f), new Vector2(.92f, .88f), FontStyle.Bold);
+            titleHistoryChampionText = CreateRuntimeText("CurrentName", championPanel.transform, "VACANT", 23, Color.white, TextAnchor.MiddleLeft,
+                new Vector2(.12f, .10f), new Vector2(.92f, .55f), FontStyle.Bold);
+
+            var historyTable = CreateRuntimePanel("HistoryTable", panel.transform, new Color32(5, 11, 23, 255), new Vector2(.04f, .05f), new Vector2(.96f, .54f));
+            var columnColor = new Color32(45, 190, 230, 255);
+            CreateRuntimeText("ReignColumn", historyTable.transform, "REIGN", 13, columnColor, TextAnchor.MiddleLeft,
+                new Vector2(.025f, .86f), new Vector2(.08f, .98f), FontStyle.Bold);
+            CreateRuntimeText("HolderColumn", historyTable.transform, "HOLDER", 13, columnColor, TextAnchor.MiddleLeft,
+                new Vector2(.08f, .86f), new Vector2(.27f, .98f), FontStyle.Bold);
+            CreateRuntimeText("WonColumn", historyTable.transform, "WON ON", 13, columnColor, TextAnchor.MiddleLeft,
+                new Vector2(.27f, .86f), new Vector2(.54f, .98f), FontStyle.Bold);
+            CreateRuntimeText("LostColumn", historyTable.transform, "LOST ON", 13, columnColor, TextAnchor.MiddleLeft,
+                new Vector2(.54f, .86f), new Vector2(.82f, .98f), FontStyle.Bold);
+            CreateRuntimeText("LengthColumn", historyTable.transform, "REIGN LENGTH", 13, columnColor, TextAnchor.MiddleLeft,
+                new Vector2(.83f, .86f), new Vector2(.985f, .98f), FontStyle.Bold);
+            var viewport = CreateRuntimePanel("HistoryViewport", historyTable.transform, new Color32(5, 11, 23, 255), new Vector2(.015f, .04f), new Vector2(.985f, .84f));
+            viewport.AddComponent<RectMask2D>();
+            var scroll = viewport.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 8f;
+            var content = new GameObject("HistoryRows", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            content.transform.SetParent(viewport.transform, false); titleHistoryList = content.transform;
+            var rect = content.GetComponent<RectTransform>(); rect.anchorMin = new Vector2(0, 1); rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(.5f, 1); rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
+            var layout = content.GetComponent<VerticalLayoutGroup>(); layout.spacing = 8; layout.padding = new RectOffset(4, 4, 4, 4);
+            layout.childControlHeight = false; layout.childControlWidth = true; layout.childForceExpandHeight = false; layout.childForceExpandWidth = true;
+            content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize; scroll.content = rect;
+            titleHistoryEmptyText = CreateRuntimeText("EmptyHistory", viewport.transform, "NO TITLE HISTORY RECORDED", 18,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
             return panel;
         }
 
@@ -1068,6 +1124,26 @@ namespace WrestlingUniverse.UI
                 20, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
                 new Vector2(.08f, .12f), new Vector2(.92f, .88f), FontStyle.Bold);
             return view;
+        }
+
+        private GameObject CreateBookingDashboardPanel(Transform workspace)
+        {
+            var panel = CreateRuntimePanel("BookingDashboardPanel", workspace, new Color32(3, 9, 14, 255), Vector2.zero, Vector2.one);
+            CreateRuntimeText("Eyebrow", panel.transform, "UP NEXT", 14, new Color32(45, 190, 230, 255), TextAnchor.MiddleCenter,
+                new Vector2(.10f, .88f), new Vector2(.90f, .97f), FontStyle.Bold);
+            bookingDashboardNameText = CreateRuntimeText("ShowName", panel.transform, "NEXT SHOW", 34, Color.white, TextAnchor.MiddleCenter,
+                new Vector2(.10f, .77f), new Vector2(.90f, .90f), FontStyle.Bold);
+            bookingDashboardScheduleText = CreateRuntimeText("Schedule", panel.transform, string.Empty, 16, new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter,
+                new Vector2(.10f, .69f), new Vector2(.90f, .78f), FontStyle.Bold);
+            var featureCard = CreateRuntimePanel("FeaturedShow", panel.transform, new Color32(12, 21, 37, 255), new Vector2(.16f, .12f), new Vector2(.84f, .68f));
+            bookingDashboardOpenButton = featureCard.AddComponent<Button>(); bookingDashboardOpenButton.targetGraphic = featureCard.GetComponent<Image>();
+            bookingDashboardImageHost = CreateRuntimePanel("ShowImageHost", featureCard.transform, new Color32(5, 11, 23, 255), new Vector2(.025f, .05f), new Vector2(.975f, .95f));
+            CreateRuntimeText("OpenPrompt", featureCard.transform, "CLICK TO BOOK SHOW", 14, new Color32(240, 190, 42, 255), TextAnchor.MiddleCenter,
+                new Vector2(.20f, .03f), new Vector2(.80f, .14f), FontStyle.Bold).raycastTarget = false;
+            bookingDashboardEmptyText = CreateRuntimeText("Empty", panel.transform,
+                "NO SHOWS ARE AVAILABLE TO BOOK\n\nCreate a TV show or special from My Universe.", 20,
+                new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.12f, .25f), new Vector2(.88f, .65f), FontStyle.Bold);
+            return panel;
         }
 
         private GameObject CreateRankingsView(Transform workspace)
@@ -1611,6 +1687,133 @@ namespace WrestlingUniverse.UI
             RefreshCalendar();
         }
 
+        private sealed class BookingCandidate
+        {
+            public string sourceId;
+            public string sourceType;
+            public string name;
+            public string imagePath;
+            public int year;
+            public int monthIndex;
+            public int weekIndex;
+            public int dayIndex;
+        }
+
+        private void RefreshBookingDashboard()
+        {
+            if (repository == null || bookingDashboardPanel == null) return;
+            var candidate = FindFeaturedBookingCandidate();
+            bookingDashboardOpenButton.onClick.RemoveAllListeners();
+            for (var index = bookingDashboardImageHost.transform.childCount - 1; index >= 0; index--)
+                Destroy(bookingDashboardImageHost.transform.GetChild(index).gameObject);
+            bookingDashboardEmptyText.gameObject.SetActive(candidate == null);
+            bookingDashboardOpenButton.gameObject.SetActive(candidate != null);
+            bookingDashboardNameText.gameObject.SetActive(candidate != null);
+            bookingDashboardScheduleText.gameObject.SetActive(candidate != null);
+            if (candidate == null) return;
+
+            bookingDashboardNameText.text = candidate.name.ToUpperInvariant();
+            bookingDashboardScheduleText.text = candidate.sourceType.ToUpperInvariant() + "  /  " + Months[candidate.monthIndex].ToUpperInvariant() +
+                " " + candidate.year + "  /  WEEK " + (candidate.weekIndex + 1) + "  /  " +
+                new[] { "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY" }[candidate.dayIndex];
+            var texture = UniverseImageStorage.LoadTexture(candidate.imagePath);
+            if (texture != null)
+            {
+                loadedTextures.Add(texture);
+                SetRuntimePhoto(bookingDashboardImageHost.transform, "FeaturedImage", texture, new Vector2(.03f, .03f), new Vector2(.97f, .97f));
+            }
+            else
+            {
+                CreateRuntimeText("NoImage", bookingDashboardImageHost.transform, candidate.name.ToUpperInvariant(), 30,
+                    new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, new Vector2(.08f, .08f), new Vector2(.92f, .92f), FontStyle.Bold).raycastTarget = false;
+            }
+            bookingDashboardOpenButton.onClick.AddListener(() => OpenFeaturedBooking(candidate));
+        }
+
+        private BookingCandidate FindFeaturedBookingCandidate()
+        {
+            var shows = repository.LoadTvShows(ActiveUniverseSession.UniverseId);
+            var specials = repository.LoadSpecials(ActiveUniverseSession.UniverseId);
+            if (shows.Count == 0 && specials.Count == 0) return null;
+
+            if (!string.IsNullOrEmpty(ActiveBookingSession.SourceId) &&
+                !repository.IsShowCardLocked(ActiveUniverseSession.UniverseId, ActiveBookingSession.SourceId, ActiveBookingSession.Year,
+                    ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek))
+            {
+                if (ActiveBookingSession.SourceType == "TV Show")
+                {
+                    var show = shows.Find(item => item.id == ActiveBookingSession.SourceId);
+                    if (show != null) return CreateBookingCandidate(show.id, "TV Show", show.name, show.imagePath, ActiveBookingSession.Year,
+                        Mathf.Max(0, Array.IndexOf(Months, ActiveBookingSession.Month)), ActiveBookingSession.Week - 1, CalendarDayIndex(ActiveBookingSession.DayOfWeek));
+                }
+                else
+                {
+                    var special = specials.Find(item => item.id == ActiveBookingSession.SourceId);
+                    if (special != null) return CreateBookingCandidate(special.id, "Special", special.name, special.imagePath, ActiveBookingSession.Year,
+                        Mathf.Max(0, Array.IndexOf(Months, ActiveBookingSession.Month)), ActiveBookingSession.Week - 1, CalendarDayIndex(ActiveBookingSession.DayOfWeek));
+                }
+            }
+
+            var startYear = calendarYear;
+            var startMonth = calendarMonthDropdown == null ? 0 : calendarMonthDropdown.value;
+            var startKey = BookingDateKey(startYear, startMonth, 0, 0);
+            if (!string.IsNullOrEmpty(ActiveBookingSession.SourceId))
+            {
+                var activeMonth = Mathf.Max(0, Array.IndexOf(Months, ActiveBookingSession.Month));
+                startYear = ActiveBookingSession.Year; startMonth = activeMonth;
+                startKey = BookingDateKey(startYear, startMonth, ActiveBookingSession.Week - 1, CalendarDayIndex(ActiveBookingSession.DayOfWeek)) + 1;
+            }
+
+            for (var monthOffset = 0; monthOffset < 240; monthOffset++)
+            {
+                var absoluteMonth = startYear * 12 + startMonth + monthOffset;
+                var year = absoluteMonth / 12; var monthIndex = absoluteMonth % 12;
+                if (year > 9999) break;
+                var candidates = new List<BookingCandidate>();
+                foreach (var show in shows)
+                {
+                    var day = CalendarDayIndex(show.dayOfWeek); if (day < 0) continue;
+                    foreach (var week in CalendarWeeksForFrequency(show.frequency))
+                        candidates.Add(CreateBookingCandidate(show.id, "TV Show", show.name, show.imagePath, year, monthIndex, week, day));
+                }
+                foreach (var special in specials)
+                {
+                    if (!string.Equals(special.month, Months[monthIndex], StringComparison.OrdinalIgnoreCase)) continue;
+                    var week = Array.IndexOf(MonthWeeks, special.week); var day = CalendarDayIndex(special.dayOfWeek);
+                    if (week >= 0 && day >= 0) candidates.Add(CreateBookingCandidate(special.id, "Special", special.name, special.imagePath, year, monthIndex, week, day));
+                }
+                candidates.Sort((left, right) => BookingDateKey(left.year, left.monthIndex, left.weekIndex, left.dayIndex)
+                    .CompareTo(BookingDateKey(right.year, right.monthIndex, right.weekIndex, right.dayIndex)));
+                foreach (var candidate in candidates)
+                {
+                    if (BookingDateKey(candidate.year, candidate.monthIndex, candidate.weekIndex, candidate.dayIndex) < startKey) continue;
+                    var dayName = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }[candidate.dayIndex];
+                    if (!repository.IsShowCardLocked(ActiveUniverseSession.UniverseId, candidate.sourceId, candidate.year, Months[candidate.monthIndex],
+                            candidate.weekIndex + 1, dayName)) return candidate;
+                }
+            }
+            return null;
+        }
+
+        private static BookingCandidate CreateBookingCandidate(string sourceId, string sourceType, string name, string imagePath,
+            int year, int monthIndex, int weekIndex, int dayIndex)
+        {
+            return new BookingCandidate { sourceId = sourceId, sourceType = sourceType, name = name, imagePath = imagePath,
+                year = year, monthIndex = monthIndex, weekIndex = weekIndex, dayIndex = dayIndex };
+        }
+
+        private static long BookingDateKey(int year, int monthIndex, int weekIndex, int dayIndex)
+        {
+            return (((long)year * 12 + monthIndex) * 4 + Mathf.Max(0, weekIndex)) * 7 + Mathf.Max(0, dayIndex);
+        }
+
+        private void OpenFeaturedBooking(BookingCandidate candidate)
+        {
+            calendarYear = candidate.year; calendarYearInput.text = candidate.year.ToString();
+            calendarMonthDropdown.value = candidate.monthIndex; calendarMonthDropdown.RefreshShownValue();
+            OpenShowBooking(candidate.sourceId, candidate.sourceType, candidate.name, candidate.weekIndex, candidate.dayIndex);
+        }
+
         private void RefreshCalendar()
         {
             if (repository == null || calendarCells.Count != 28) return;
@@ -1844,24 +2047,34 @@ namespace WrestlingUniverse.UI
                 (activeBookingBrandNames.Count == 0 || activeBookingBrandNames.Contains(wrestler.brand)) &&
                 (gender == "Both Genders" || wrestler.gender == gender));
             selectedMatchParticipantIds.RemoveAll(id => availableMatchParticipants.Find(wrestler => wrestler.id == id) == null);
-            for (var index = matchParticipantMenu.transform.childCount - 1; index >= 0; index--)
+            for (var index = matchParticipantContent.childCount - 1; index >= 0; index--)
             {
-                var oldRow = matchParticipantMenu.transform.GetChild(index).gameObject;
+                var oldRow = matchParticipantContent.GetChild(index).gameObject;
                 oldRow.SetActive(false); Destroy(oldRow);
             }
-            var count = Mathf.Max(1, availableMatchParticipants.Count); var rowHeight = 1f / count;
+            const float rowHeight = 38f;
+            matchParticipantContent.sizeDelta = new Vector2(0, Mathf.Max(rowHeight, availableMatchParticipants.Count * rowHeight));
             for (var index = 0; index < availableMatchParticipants.Count; index++)
             {
-                var wrestler = availableMatchParticipants[index]; var top = 1f - index * rowHeight; var bottom = top - rowHeight;
+                var wrestler = availableMatchParticipants[index];
                 var selected = selectedMatchParticipantIds.Contains(wrestler.id);
-                var row = CreateRuntimeButton("Participant_" + wrestler.id, matchParticipantMenu.transform, (selected ? "✓  " : "     ") + wrestler.name,
-                    new Vector2(.015f, bottom), new Vector2(.985f, top), selected ? new Color32(25, 65, 82, 255) : new Color32(9, 15, 29, 255), Color.white);
+                var row = CreateRuntimeButton("Participant_" + wrestler.id, matchParticipantContent, string.Empty, Vector2.zero, Vector2.one,
+                    selected ? new Color32(25, 65, 82, 255) : new Color32(9, 15, 29, 255), Color.white);
+                var rowRect = row.GetComponent<RectTransform>(); rowRect.anchorMin = new Vector2(.015f, 1); rowRect.anchorMax = new Vector2(.985f, 1);
+                rowRect.pivot = new Vector2(.5f, 1); rowRect.anchoredPosition = new Vector2(0, -index * rowHeight); rowRect.sizeDelta = new Vector2(0, rowHeight);
+                var defaultLabel = row.transform.Find("Label"); if (defaultLabel != null) defaultLabel.gameObject.SetActive(false);
                 row.onClick.AddListener(() => ToggleMatchParticipant(wrestler.id));
+                var label = CreateRuntimeText("ParticipantLabel_" + wrestler.id, matchParticipantContent,
+                    (selected ? "SELECTED  /  " : string.Empty) + wrestler.name, 15, Color.white, TextAnchor.MiddleLeft,
+                    Vector2.zero, Vector2.one, selected ? FontStyle.Bold : FontStyle.Normal);
+                var labelRect = label.rectTransform; labelRect.anchorMin = new Vector2(.055f, 1); labelRect.anchorMax = new Vector2(.96f, 1);
+                labelRect.pivot = new Vector2(.5f, 1); labelRect.anchoredPosition = new Vector2(0, -index * rowHeight);
+                labelRect.sizeDelta = new Vector2(0, rowHeight); label.raycastTarget = false;
             }
             if (availableMatchParticipants.Count == 0)
-                CreateRuntimeText("NoParticipants", matchParticipantMenu.transform, "No eligible wrestlers for this show and filter", 13,
+                CreateRuntimeText("NoParticipants", matchParticipantContent, "No eligible wrestlers for this show and filter", 13,
                     new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-            UpdateMatchParticipantCaption();
+            UpdateMatchParticipantCaption(); Canvas.ForceUpdateCanvases();
         }
 
         private void ToggleMatchParticipant(string wrestlerId)
@@ -2024,9 +2237,13 @@ namespace WrestlingUniverse.UI
                 var header = CreateRuntimeButton("Header", card.transform, string.Empty, new Vector2(0, expanded ? .80f : 0), Vector2.one,
                     new Color32(7, 12, 22, 255), Color.white);
                 var oldLabel = header.transform.Find("Label"); if (oldLabel != null) Destroy(oldLabel.gameObject);
-                CreateRuntimeText("Title", header.transform, "#" + match.cardPosition + "  " + BuildMatchupLabel(match) + "  [" +
-                    match.stipulation.ToUpperInvariant() + " - " + match.format.ToUpperInvariant() + "]",
+                var headerText = "#" + match.cardPosition + "  " + BuildMatchupLabel(match) + "  [" +
+                    match.stipulation.ToUpperInvariant() + " - " + match.format.ToUpperInvariant() + "]";
+                if (!string.IsNullOrEmpty(match.titleName))
+                    headerText += "  <color=#F0BE2A>" + EscapeRuntimeRichText(match.titleName.ToUpperInvariant()) + "</color>";
+                var matchHeaderTitle = CreateRuntimeText("Title", header.transform, headerText,
                     15, Color.white, TextAnchor.MiddleLeft, new Vector2(.035f, .08f), new Vector2(.90f, .92f), FontStyle.Bold);
+                matchHeaderTitle.supportRichText = true;
                 CreateRuntimeText("Arrow", header.transform, expanded ? "▲" : "▼", 15, new Color32(190, 198, 210, 255), TextAnchor.MiddleCenter,
                     new Vector2(.92f, .08f), new Vector2(.98f, .92f), FontStyle.Bold);
                 header.onClick.AddListener(() => { if (!showCardLocked) ToggleBookedMatchCard(match.id); });
@@ -2051,6 +2268,20 @@ namespace WrestlingUniverse.UI
                     var showVs = index < match.participants.Count - 1 && (teamSplit == 0 || index + 1 == teamSplit);
                     if (showVs) CreateRuntimeText("Vs_" + index, body.transform, "VS", 13, new Color32(240, 190, 42, 255),
                         TextAnchor.MiddleCenter, new Vector2(right - .025f, .45f), new Vector2(right + .025f, .58f), FontStyle.Bold);
+                }
+                if (!string.IsNullOrEmpty(match.titleId))
+                {
+                    var titleTexture = UniverseImageStorage.LoadTexture(match.titleImagePath);
+                    if (titleTexture != null)
+                    {
+                        loadedTextures.Add(titleTexture);
+                        SetRuntimePhoto(body.transform, "TitleBelt", titleTexture, new Vector2(.38f, .76f), new Vector2(.62f, .97f));
+                    }
+                    else
+                    {
+                        CreateRuntimeText("TitleMatch", body.transform, match.titleName.ToUpperInvariant(), 11, new Color32(240, 190, 42, 255),
+                            TextAnchor.MiddleCenter, new Vector2(.35f, .87f), new Vector2(.65f, .97f), FontStyle.Bold);
+                    }
                 }
                 if (resultsEntryMode)
                 {
@@ -2165,6 +2396,11 @@ namespace WrestlingUniverse.UI
             if (split <= 0 || split >= names.Count) return string.Join("  VS  ", names.ToArray());
             return string.Join(" AND ", names.GetRange(0, split).ToArray()) + "  VS  " +
                    string.Join(" AND ", names.GetRange(split, names.Count - split).ToArray());
+        }
+
+        private static string EscapeRuntimeRichText(string value)
+        {
+            return string.IsNullOrEmpty(value) ? string.Empty : value.Replace("<", "‹").Replace(">", "›");
         }
 
         private static int MatchTeamSplitIndex(string format)
@@ -2287,7 +2523,7 @@ namespace WrestlingUniverse.UI
                     showResultsValidationText.text = "Save a winner and result for every match before finalizing.";
                     RefreshBookingAccordionLayout(); return;
                 }
-            repository.FinalizeShowResults(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
+            repository.FinalizeShowResults(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId, ActiveBookingSession.ShowName,
                 ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
             showResultsFinalized = true; resultsEntryMode = false;
             showResultsValidationText.text = "Results finalized. This historical card is now read-only.";
@@ -2483,6 +2719,53 @@ namespace WrestlingUniverse.UI
             sectionContentText.gameObject.SetActive(false);
             titleHistoryNameText.text = title.name.ToUpperInvariant();
             titleHistoryPanel.SetActive(true);
+            titleHistoryChampionText.text = string.IsNullOrEmpty(title.holderWrestlerId) ? "VACANT" : title.holderName.ToUpperInvariant();
+            for (var index = titleHistoryChampionImage.transform.childCount - 1; index >= 0; index--)
+                Destroy(titleHistoryChampionImage.transform.GetChild(index).gameObject);
+            if (!string.IsNullOrEmpty(title.holderWrestlerId))
+            {
+                var champion = repository.LoadWrestlers(title.universeId).Find(item => item.id == title.holderWrestlerId);
+                if (champion != null)
+                {
+                    var texture = UniverseImageStorage.LoadTexture(champion.photoPath);
+                    if (texture != null) { loadedTextures.Add(texture); SetRuntimePhoto(titleHistoryChampionImage.transform, "Portrait", texture, new Vector2(.04f, .04f), new Vector2(.96f, .96f)); }
+                }
+            }
+            for (var index = titleHistoryList.childCount - 1; index >= 0; index--) Destroy(titleHistoryList.GetChild(index).gameObject);
+            var reigns = repository.LoadTitleReigns(title.id);
+            titleHistoryEmptyText.gameObject.SetActive(reigns.Count == 0);
+            foreach (var reign in reigns)
+            {
+                var row = CreateRuntimePanel("Reign_" + reign.reignNumber, titleHistoryList, new Color32(12, 21, 37, 255), Vector2.zero, Vector2.one);
+                row.GetComponent<RectTransform>().sizeDelta = new Vector2(0, 72);
+                var wonOn = FormatTitleEvent(reign.wonShowName, reign.wonMonth, reign.wonWeek, reign.wonYear);
+                var lostOn = reign.lostYear.HasValue ? FormatTitleEvent(reign.lostShowName, reign.lostMonth, reign.lostWeek.GetValueOrDefault(), reign.lostYear.Value) : "CURRENT";
+                var length = reign.lostYear.HasValue ? CalculateReignWeeks(reign) + " WEEKS" : "—";
+                CreateRuntimeText("Number", row.transform, "#" + reign.reignNumber, 16, new Color32(240, 190, 42, 255), TextAnchor.MiddleLeft,
+                    new Vector2(.015f, 0), new Vector2(.08f, 1), FontStyle.Bold);
+                CreateRuntimeText("Holder", row.transform, reign.holderName.ToUpperInvariant(), 15, Color.white, TextAnchor.MiddleLeft,
+                    new Vector2(.08f, 0), new Vector2(.27f, 1), FontStyle.Bold);
+                CreateRuntimeText("Won", row.transform, wonOn, 13, new Color32(190, 203, 218, 255), TextAnchor.MiddleLeft,
+                    new Vector2(.27f, 0), new Vector2(.54f, 1));
+                CreateRuntimeText("Lost", row.transform, lostOn, 13, reign.lostYear.HasValue ? new Color32(190, 203, 218, 255) : new Color32(45, 190, 230, 255), TextAnchor.MiddleLeft,
+                    new Vector2(.54f, 0), new Vector2(.82f, 1), reign.lostYear.HasValue ? FontStyle.Normal : FontStyle.Bold);
+                CreateRuntimeText("Length", row.transform, length, 13, new Color32(142, 160, 181, 255), TextAnchor.MiddleLeft,
+                    new Vector2(.83f, 0), new Vector2(.985f, 1), FontStyle.Bold);
+            }
+        }
+
+        private static string FormatTitleEvent(string showName, string month, int week, int year)
+        {
+            return (string.IsNullOrEmpty(showName) ? "SHOW" : showName.ToUpperInvariant()) + "  " + month.ToUpperInvariant() + " WEEK " + week + ", " + year;
+        }
+
+        private static int CalculateReignWeeks(TitleReignRecord reign)
+        {
+            var wonMonth = Mathf.Max(0, Array.IndexOf(Months, reign.wonMonth));
+            var lostMonth = Mathf.Max(0, Array.IndexOf(Months, reign.lostMonth));
+            var wonIndex = reign.wonYear * 48 + wonMonth * 4 + Mathf.Max(0, reign.wonWeek - 1);
+            var lostIndex = reign.lostYear.GetValueOrDefault() * 48 + lostMonth * 4 + Mathf.Max(0, reign.lostWeek.GetValueOrDefault() - 1);
+            return Mathf.Max(0, lostIndex - wonIndex);
         }
 
         private void PickTitleImage()
@@ -2532,7 +2815,7 @@ namespace WrestlingUniverse.UI
                     TextAnchor.MiddleCenter, new Vector2(.05f, .13f), new Vector2(.95f, .23f), FontStyle.Bold);
                 var edit = CreateRuntimeButton("EditButton", card.transform, "EDIT", new Vector2(.08f, .025f), new Vector2(.48f, .12f),
                     new Color32(25, 45, 65, 255), Color.white); edit.onClick.AddListener(() => EditTitle(title));
-                var history = CreateRuntimeButton("HistoryButton", card.transform, "HISTORY", new Vector2(.52f, .025f), new Vector2(.92f, .12f),
+                var history = CreateRuntimeButton("HistoryButton", card.transform, "INFO", new Vector2(.52f, .025f), new Vector2(.92f, .12f),
                     new Color32(25, 45, 65, 255), Color.white); history.onClick.AddListener(() => ShowTitleHistory(title));
             }
         }
