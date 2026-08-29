@@ -859,6 +859,38 @@ namespace WrestlingUniverse.Persistence
             }
         }
 
+        public long GetLatestFinalizedShowOrdinal(string universeId)
+        {
+            long latest = -1;
+            using (var connection = OpenConnection())
+            using (var command = CreateCommand(connection))
+            {
+                command.CommandText = "SELECT calendar_year,calendar_month,calendar_week,day_of_week FROM booked_show_cards " +
+                    "WHERE universe_id=@universe AND results_finalized=1;";
+                AddParameter(command, "@universe", universeId);
+                using (var reader = command.ExecuteReader()) while (reader.Read())
+                {
+                    var month = CalendarMonthIndex(reader.GetString(1)); var day = CalendarDayIndex(reader.GetString(3));
+                    if (month < 0 || day < 0) continue;
+                    var value = (((long)reader.GetInt32(0) * 12 + month) * 4 + Math.Max(0, reader.GetInt32(2) - 1)) * 7 + day;
+                    if (value > latest) latest = value;
+                }
+            }
+            return latest;
+        }
+
+        private static int CalendarMonthIndex(string month)
+        {
+            return Array.FindIndex(new[] { "January", "February", "March", "April", "May", "June", "July", "August",
+                "September", "October", "November", "December" }, value => string.Equals(value, month, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static int CalendarDayIndex(string day)
+        {
+            return Array.FindIndex(new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" },
+                value => string.Equals(value, day, StringComparison.OrdinalIgnoreCase));
+        }
+
         public void FinalizeShowResults(string universeId, string sourceId, string sourceName, int year, string month, int week, string dayOfWeek)
         {
             using (var connection = OpenConnection())

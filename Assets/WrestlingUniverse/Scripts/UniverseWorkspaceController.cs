@@ -224,6 +224,7 @@ namespace WrestlingUniverse.UI
         private Button cardLockButton;
         private Text cardLockButtonLabel;
         private bool showCardLocked;
+        private bool showTimelineClosed;
         private Button showResultsButton;
         private Text showResultsButtonLabel;
         private bool resultsEntryMode;
@@ -1735,8 +1736,11 @@ namespace WrestlingUniverse.UI
             var shows = repository.LoadTvShows(ActiveUniverseSession.UniverseId);
             var specials = repository.LoadSpecials(ActiveUniverseSession.UniverseId);
             if (shows.Count == 0 && specials.Count == 0) return null;
+            var finalizedCutoff = repository.GetLatestFinalizedShowOrdinal(ActiveUniverseSession.UniverseId);
 
             if (!string.IsNullOrEmpty(ActiveBookingSession.SourceId) &&
+                BookingDateKey(ActiveBookingSession.Year, Mathf.Max(0, Array.IndexOf(Months, ActiveBookingSession.Month)),
+                    ActiveBookingSession.Week - 1, CalendarDayIndex(ActiveBookingSession.DayOfWeek)) > finalizedCutoff &&
                 !repository.IsShowCardLocked(ActiveUniverseSession.UniverseId, ActiveBookingSession.SourceId, ActiveBookingSession.Year,
                     ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek))
             {
@@ -1786,7 +1790,8 @@ namespace WrestlingUniverse.UI
                     .CompareTo(BookingDateKey(right.year, right.monthIndex, right.weekIndex, right.dayIndex)));
                 foreach (var candidate in candidates)
                 {
-                    if (BookingDateKey(candidate.year, candidate.monthIndex, candidate.weekIndex, candidate.dayIndex) < startKey) continue;
+                    var candidateKey = BookingDateKey(candidate.year, candidate.monthIndex, candidate.weekIndex, candidate.dayIndex);
+                    if (candidateKey < startKey || candidateKey <= finalizedCutoff) continue;
                     var dayName = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }[candidate.dayIndex];
                     if (!repository.IsShowCardLocked(ActiveUniverseSession.UniverseId, candidate.sourceId, candidate.year, Months[candidate.monthIndex],
                             candidate.weekIndex + 1, dayName)) return candidate;
@@ -1818,6 +1823,7 @@ namespace WrestlingUniverse.UI
         {
             if (repository == null || calendarCells.Count != 28) return;
             var selectedMonth = calendarMonthDropdown.options[calendarMonthDropdown.value].text;
+            var finalizedCutoff = repository.GetLatestFinalizedShowOrdinal(ActiveUniverseSession.UniverseId);
             if (calendarHeadingText != null) calendarHeadingText.text = selectedMonth.ToUpperInvariant() + "  " + calendarYear;
             foreach (var cell in calendarCells)
                 for (var index = cell.childCount - 1; index >= 0; index--) Destroy(cell.GetChild(index).gameObject);
@@ -1827,7 +1833,7 @@ namespace WrestlingUniverse.UI
                 var day = CalendarDayIndex(show.dayOfWeek);
                 if (day < 0) continue;
                 var weeks = CalendarWeeksForFrequency(show.frequency);
-                foreach (var week in weeks) AddCalendarEvent(week, day, show.id, "TV Show", show.name, show.imagePath, false);
+                foreach (var week in weeks) AddCalendarEvent(week, day, show.id, "TV Show", show.name, show.imagePath, false, finalizedCutoff);
             }
 
             foreach (var special in repository.LoadSpecials(ActiveUniverseSession.UniverseId))
@@ -1835,11 +1841,11 @@ namespace WrestlingUniverse.UI
                 if (!string.Equals(special.month, selectedMonth, StringComparison.OrdinalIgnoreCase)) continue;
                 var week = Array.IndexOf(MonthWeeks, special.week);
                 var day = CalendarDayIndex(special.dayOfWeek);
-                if (week >= 0 && day >= 0) AddCalendarEvent(week, day, special.id, "Special", special.name, special.imagePath, true);
+                if (week >= 0 && day >= 0) AddCalendarEvent(week, day, special.id, "Special", special.name, special.imagePath, true, finalizedCutoff);
             }
         }
 
-        private void AddCalendarEvent(int week, int day, string sourceId, string sourceType, string eventName, string imagePath, bool isSpecial)
+        private void AddCalendarEvent(int week, int day, string sourceId, string sourceType, string eventName, string imagePath, bool isSpecial, long finalizedCutoff)
         {
             if (week < 0 || week > 3 || day < 0 || day > 6) return;
             var cell = calendarCells[week * 7 + day];
@@ -1863,6 +1869,13 @@ namespace WrestlingUniverse.UI
             }
             CreateRuntimeText("EventName", tile.transform, eventName.ToUpperInvariant(), 10, isSpecial ? new Color32(240, 190, 42, 255) : Color.white,
                 TextAnchor.MiddleLeft, new Vector2(textMin, .06f), new Vector2(.97f, .94f), FontStyle.Bold);
+            if (BookingDateKey(calendarYear, calendarMonthDropdown.value, week, day) <= finalizedCutoff)
+            {
+                var shade = CreateRuntimePanel("TimelineClosedShade", tile.transform, new Color32(0, 0, 0, 105), Vector2.zero, Vector2.one);
+                shade.GetComponent<Image>().raycastTarget = false;
+                CreateRuntimeText("ViewOnly", tile.transform, "VIEW ONLY", 9, new Color32(190, 198, 210, 255), TextAnchor.LowerRight,
+                    new Vector2(.50f, .04f), new Vector2(.95f, .36f), FontStyle.Bold).raycastTarget = false;
+            }
         }
 
         private void OpenShowBooking(string sourceId, string sourceType, string showName, int week, int day)
@@ -1887,6 +1900,11 @@ namespace WrestlingUniverse.UI
                 ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
             showResultsFinalized = repository.AreShowResultsFinalized(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId,
                 ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
+            showTimelineClosed = BookingDateKey(ActiveBookingSession.Year, Array.IndexOf(Months, ActiveBookingSession.Month),
+                ActiveBookingSession.Week - 1, CalendarDayIndex(ActiveBookingSession.DayOfWeek)) <=
+                repository.GetLatestFinalizedShowOrdinal(ActiveBookingSession.UniverseId);
+            showCardLocked = showCardLocked || showTimelineClosed;
+            if (showTimelineClosed && !showResultsFinalized) bookingScheduleText.text += "  /  VIEW ONLY - TIMELINE CLOSED";
             resultsEntryMode = false; showResultsValidationText.text = string.Empty;
             expandedBookedMatchIds.Clear(); expandedBookedSegmentIds.Clear(); RefreshBookedMatchCards();
             matchBookingExpanded = false; segmentBookingExpanded = false; RefreshBookingAccordionLayout();
@@ -2096,6 +2114,7 @@ namespace WrestlingUniverse.UI
 
         private void AddMatchToCard()
         {
+            if (showCardLocked || showTimelineClosed) return;
             var needed = RequiredMatchParticipants();
             if (selectedMatchParticipantIds.Count != needed)
             { matchBookingValidationText.text = "Select exactly " + needed + " wrestlers for this format."; return; }
@@ -2179,6 +2198,7 @@ namespace WrestlingUniverse.UI
 
         private void AddSegmentToCard()
         {
+            if (showCardLocked || showTimelineClosed) return;
             if (string.IsNullOrWhiteSpace(segmentTitleInput.text)) { segmentValidationText.text = "Enter a segment title."; return; }
             if (selectedSegmentParticipantIds.Count == 0) { segmentValidationText.text = "Select at least one wrestler."; return; }
             if (string.IsNullOrWhiteSpace(segmentSummaryInput.text)) { segmentValidationText.text = "Enter a segment summary."; return; }
@@ -2375,7 +2395,7 @@ namespace WrestlingUniverse.UI
             bookedMatchCardListLayout.preferredHeight = Mathf.Max(58, totalHeight);
             if (cardLockButton != null)
             {
-                cardLockButton.gameObject.SetActive(!showResultsFinalized);
+                cardLockButton.gameObject.SetActive(!showResultsFinalized && !showTimelineClosed);
                 cardLockButton.interactable = showCardLocked || matches.Count + segments.Count > 0;
                 cardLockButtonLabel.text = resultsEntryMode ? "CANCEL RESULTS ENTRY" : (showCardLocked ? "UNLOCK CARD" : "LOCK CARD");
                 cardLockButton.GetComponent<Image>().color = showCardLocked ? new Color32(25, 65, 82, 255) : new Color32(92, 73, 24, 255);
@@ -2383,8 +2403,9 @@ namespace WrestlingUniverse.UI
             if (showResultsButton != null)
             {
                 showResultsButton.gameObject.SetActive(showCardLocked);
-                showResultsButton.interactable = !showResultsFinalized;
-                showResultsButtonLabel.text = showResultsFinalized ? "RESULTS FINALIZED" : (resultsEntryMode ? "FINALIZE RESULTS" : "ENTER RESULTS");
+                showResultsButton.interactable = !showResultsFinalized && !showTimelineClosed;
+                showResultsButtonLabel.text = showResultsFinalized ? "RESULTS FINALIZED" :
+                    (showTimelineClosed ? "TIMELINE CLOSED  /  VIEW ONLY" : (resultsEntryMode ? "FINALIZE RESULTS" : "ENTER RESULTS"));
             }
             Canvas.ForceUpdateCanvases(); LayoutRebuilder.ForceRebuildLayoutImmediate(bookingAccordionContent);
         }
@@ -2491,7 +2512,7 @@ namespace WrestlingUniverse.UI
         private void SaveEnteredMatchResult(BookedMatchRecord match, Dropdown winnerDropdown, Dropdown finishDropdown,
             InputField ratingInput, InputField durationInput, InputField notesInput, bool titleChanged, MatchResultRecord existingResult)
         {
-            if (showResultsFinalized || !resultsEntryMode || match.participants.Count == 0) return;
+            if (showResultsFinalized || showTimelineClosed || !resultsEntryMode || match.participants.Count == 0) return;
             var rating = 0;
             if (!string.IsNullOrWhiteSpace(ratingInput.text) && (!int.TryParse(ratingInput.text, out rating) || rating < 0 || rating > 100))
             { showResultsValidationText.text = "Match ratings must be between 0 and 100."; RefreshBookingAccordionLayout(); return; }
@@ -2508,7 +2529,7 @@ namespace WrestlingUniverse.UI
 
         private void ToggleResultsEntryOrFinalize()
         {
-            if (!showCardLocked || showResultsFinalized) return;
+            if (!showCardLocked || showResultsFinalized || showTimelineClosed) return;
             if (!resultsEntryMode)
             {
                 resultsEntryMode = true; showResultsValidationText.text = string.Empty;
@@ -2525,7 +2546,7 @@ namespace WrestlingUniverse.UI
                 }
             repository.FinalizeShowResults(ActiveBookingSession.UniverseId, ActiveBookingSession.SourceId, ActiveBookingSession.ShowName,
                 ActiveBookingSession.Year, ActiveBookingSession.Month, ActiveBookingSession.Week, ActiveBookingSession.DayOfWeek);
-            showResultsFinalized = true; resultsEntryMode = false;
+            showResultsFinalized = true; showTimelineClosed = true; resultsEntryMode = false;
             showResultsValidationText.text = "Results finalized. This historical card is now read-only.";
             RefreshBookedMatchCards(); RefreshBookingAccordionLayout();
         }
@@ -2533,7 +2554,7 @@ namespace WrestlingUniverse.UI
         private void ToggleShowCardLock()
         {
             if (string.IsNullOrEmpty(ActiveBookingSession.SourceId)) return;
-            if (showResultsFinalized) return;
+            if (showResultsFinalized || showTimelineClosed) return;
             if (resultsEntryMode)
             {
                 resultsEntryMode = false; showResultsValidationText.text = string.Empty;
