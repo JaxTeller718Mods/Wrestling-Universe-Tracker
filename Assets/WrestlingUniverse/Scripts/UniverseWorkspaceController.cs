@@ -305,7 +305,7 @@ namespace WrestlingUniverse.UI
 
             try
             {
-                repository = new UniverseSaveRepository();
+                repository = new UniverseSaveRepository(ActiveUniverseSession.UniverseId);
                 repository.Initialize();
                 var universe = repository.LoadById(ActiveUniverseSession.UniverseId);
                 if (universe == null)
@@ -2930,7 +2930,9 @@ namespace WrestlingUniverse.UI
                 var teams = repository.LoadTeams(ActiveUniverseSession.UniverseId);
                 if (wrestlers.Count == 0 && teams.Count == 0) { SetRosterTransferStatus("There is no roster or team data to export.", false); return; }
                 string path;
-                if (!WindowsImageFilePicker.TryChooseRosterExportPath("WrestlingUniverseRoster_" + DateTime.Now.ToString("yyyyMMdd"), out path)) return;
+                var exportDirectory = UniverseStoragePaths.GetExports(ActiveUniverseSession.UniverseId);
+                System.IO.Directory.CreateDirectory(exportDirectory);
+                if (!WindowsImageFilePicker.TryChooseRosterExportPath("WrestlingUniverseRoster_" + DateTime.Now.ToString("yyyyMMdd"), exportDirectory, out path)) return;
                 RosterTransferService.Export(path, wrestlers, teams);
                 SetRosterTransferStatus("Exported " + wrestlers.Count + " wrestlers and " + teams.Count + " teams.", true);
             }

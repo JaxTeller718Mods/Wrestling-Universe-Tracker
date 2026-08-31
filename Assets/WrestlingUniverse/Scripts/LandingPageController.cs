@@ -181,6 +181,12 @@ namespace WrestlingUniverse.UI
                 if (!string.IsNullOrEmpty(selectedPromotionImagePath))
                     draft.promotionImagePath = UniverseImageStorage.Import(draft.id, selectedPromotionImagePath, "promotion");
                 repository.Save(draft);
+                if (isEditing && System.IO.File.Exists(UniverseStoragePaths.GetDatabase(draft.id)))
+                {
+                    var isolatedRepository = new UniverseSaveRepository(draft.id);
+                    isolatedRepository.Initialize();
+                    isolatedRepository.Save(draft);
+                }
                 if (isEditing)
                 {
                     var index = universes.FindIndex(item => item.id == draft.id);
@@ -211,12 +217,23 @@ namespace WrestlingUniverse.UI
             {
                 repository = new UniverseSaveRepository();
                 repository.Initialize();
+                cardsByUniverseId.Clear();
+                for (var index = universeList.childCount - 1; index >= 0; index--)
+                {
+                    var child = universeList.GetChild(index);
+                    if (child != universeCardTemplate.transform && child != emptyStateText.transform && child.name.StartsWith("UniverseCard_", StringComparison.Ordinal))
+                        Destroy(child.gameObject);
+                }
                 universes.Clear();
                 universes.AddRange(repository.LoadAll());
+                universeList.gameObject.SetActive(true);
                 for (var index = 0; index < universes.Count; index++)
                     AddUniverseCard(universes[index], index + 1);
 
-                Debug.Log("Universe saves loaded from: " + repository.DatabasePath);
+                Canvas.ForceUpdateCanvases();
+                var listRect = universeList as RectTransform;
+                if (listRect != null) LayoutRebuilder.ForceRebuildLayoutImmediate(listRect);
+                Debug.Log("Loaded " + universes.Count + " universe saves from: " + repository.DatabasePath);
             }
             catch (Exception exception)
             {
@@ -230,7 +247,13 @@ namespace WrestlingUniverse.UI
         {
             var card = Instantiate(universeCardTemplate, universeList);
             card.name = "UniverseCard_" + slot;
+            card.transform.localScale = Vector3.one;
             card.SetActive(true);
+            var layout = card.GetComponent<LayoutElement>();
+            if (layout == null) layout = card.AddComponent<LayoutElement>();
+            layout.minWidth = 420; layout.preferredWidth = 550; layout.flexibleWidth = 0;
+            var listRect = universeList as RectTransform;
+            if (listRect != null && listRect.rect.height > 0) layout.preferredHeight = listRect.rect.height;
             cardsByUniverseId[draft.id] = card;
             PopulateUniverseCard(card, draft, slot);
         }

@@ -12,12 +12,19 @@ namespace WrestlingUniverse.Persistence
     {
         private const int CurrentSchemaVersion = 18;
         private readonly string connectionString;
+        private readonly string isolatedUniverseId;
 
         public string DatabasePath { get; }
 
-        public UniverseSaveRepository()
+        public UniverseSaveRepository(string universeId = null)
         {
-            DatabasePath = Path.Combine(Application.persistentDataPath, "wrestling-universe.db");
+            isolatedUniverseId = universeId;
+            if (string.IsNullOrEmpty(universeId)) DatabasePath = UniverseStoragePaths.CatalogDatabase;
+            else
+            {
+                UniverseStoragePaths.EnsureDirectories(universeId);
+                DatabasePath = UniverseStoragePaths.GetDatabase(universeId);
+            }
             connectionString = "URI=file:" + DatabasePath;
         }
 
@@ -150,6 +157,7 @@ namespace WrestlingUniverse.Persistence
 
                 transaction.Commit();
             }
+            if (!string.IsNullOrEmpty(isolatedUniverseId)) MigrateUniverseFromCatalogIfNeeded();
         }
 
         public List<UI.UniverseDraft> LoadAll()
@@ -218,10 +226,13 @@ namespace WrestlingUniverse.Persistence
             using (var command = CreateCommand(connection))
             {
                 command.CommandText =
-                    "INSERT OR REPLACE INTO universes " +
+                    "INSERT INTO universes " +
                     "(id, owner_name, promotion_name, promotion_initials, start_date, owner_image_path, " +
                     "promotion_image_path, created_utc, updated_utc) VALUES " +
-                    "(@id, @owner, @promotion, @initials, @startDate, @ownerImage, @promotionImage, @created, @updated);";
+                    "(@id, @owner, @promotion, @initials, @startDate, @ownerImage, @promotionImage, @created, @updated) " +
+                    "ON CONFLICT(id) DO UPDATE SET owner_name=excluded.owner_name,promotion_name=excluded.promotion_name," +
+                    "promotion_initials=excluded.promotion_initials,start_date=excluded.start_date,owner_image_path=excluded.owner_image_path," +
+                    "promotion_image_path=excluded.promotion_image_path,updated_utc=excluded.updated_utc;";
                 AddParameter(command, "@id", universe.id);
                 AddParameter(command, "@owner", universe.ownerName);
                 AddParameter(command, "@promotion", universe.promotionName);
@@ -277,9 +288,11 @@ namespace WrestlingUniverse.Persistence
             using (var connection = OpenConnection())
             using (var command = CreateCommand(connection))
             {
-                command.CommandText = "INSERT OR REPLACE INTO wrestlers " +
+                command.CommandText = "INSERT INTO wrestlers " +
                     "(id, universe_id, name, brand, disposition, gender, tier, overall, photo_path, created_utc, updated_utc) " +
-                    "VALUES (@id, @universeId, @name, @brand, @disposition, @gender, @tier, @overall, @photo, @created, @updated);";
+                    "VALUES (@id, @universeId, @name, @brand, @disposition, @gender, @tier, @overall, @photo, @created, @updated) " +
+                    "ON CONFLICT(id) DO UPDATE SET name=excluded.name,brand=excluded.brand,disposition=excluded.disposition," +
+                    "gender=excluded.gender,tier=excluded.tier,overall=excluded.overall,photo_path=excluded.photo_path,updated_utc=excluded.updated_utc;";
                 AddParameter(command, "@id", wrestler.id); AddParameter(command, "@universeId", wrestler.universeId);
                 AddParameter(command, "@name", wrestler.name); AddParameter(command, "@brand", wrestler.brand);
                 AddParameter(command, "@disposition", wrestler.disposition); AddParameter(command, "@gender", wrestler.gender);
@@ -329,8 +342,9 @@ namespace WrestlingUniverse.Persistence
                 using (var command = CreateCommand(connection))
                 {
                     command.Transaction = transaction;
-                    command.CommandText = "INSERT OR REPLACE INTO teams(id, universe_id, name, brand, disposition, photo_path, created_utc, updated_utc) " +
-                                          "VALUES(@id, @universeId, @name, @brand, @disposition, @photo, @created, @updated);";
+                    command.CommandText = "INSERT INTO teams(id, universe_id, name, brand, disposition, photo_path, created_utc, updated_utc) " +
+                        "VALUES(@id,@universeId,@name,@brand,@disposition,@photo,@created,@updated) ON CONFLICT(id) DO UPDATE SET " +
+                        "name=excluded.name,brand=excluded.brand,disposition=excluded.disposition,photo_path=excluded.photo_path,updated_utc=excluded.updated_utc;";
                     AddParameter(command, "@id", team.id); AddParameter(command, "@universeId", team.universeId);
                     AddParameter(command, "@name", team.name); AddParameter(command, "@brand", team.brand);
                     AddParameter(command, "@disposition", team.disposition); AddParameter(command, "@photo", team.photoPath);
@@ -416,8 +430,9 @@ namespace WrestlingUniverse.Persistence
             using (var connection = OpenConnection())
             using (var command = CreateCommand(connection))
             {
-                command.CommandText = "INSERT OR REPLACE INTO locations(id, universe_id, venue_name, venue_location, capacity, created_utc, updated_utc) " +
-                                      "VALUES(@id, @universeId, @name, @location, @capacity, @created, @updated);";
+                command.CommandText = "INSERT INTO locations(id, universe_id, venue_name, venue_location, capacity, created_utc, updated_utc) " +
+                    "VALUES(@id,@universeId,@name,@location,@capacity,@created,@updated) ON CONFLICT(id) DO UPDATE SET " +
+                    "venue_name=excluded.venue_name,venue_location=excluded.venue_location,capacity=excluded.capacity,updated_utc=excluded.updated_utc;";
                 AddParameter(command, "@id", location.id); AddParameter(command, "@universeId", location.universeId);
                 AddParameter(command, "@name", location.venueName); AddParameter(command, "@location", location.venueLocation);
                 AddParameter(command, "@capacity", location.capacity); AddParameter(command, "@created", location.createdUtc);
@@ -509,8 +524,9 @@ namespace WrestlingUniverse.Persistence
                 using (var command = CreateCommand(connection))
                 {
                     command.Transaction = transaction;
-                    command.CommandText = "INSERT OR REPLACE INTO tv_shows(id, universe_id, name, frequency, day_of_week, image_path, created_utc, updated_utc) " +
-                                          "VALUES(@id, @universeId, @name, @frequency, @day, @image, @created, @updated);";
+                    command.CommandText = "INSERT INTO tv_shows(id, universe_id, name, frequency, day_of_week, image_path, created_utc, updated_utc) " +
+                        "VALUES(@id,@universeId,@name,@frequency,@day,@image,@created,@updated) ON CONFLICT(id) DO UPDATE SET " +
+                        "name=excluded.name,frequency=excluded.frequency,day_of_week=excluded.day_of_week,image_path=excluded.image_path,updated_utc=excluded.updated_utc;";
                     AddParameter(command, "@id", show.id); AddParameter(command, "@universeId", show.universeId);
                     AddParameter(command, "@name", show.name); AddParameter(command, "@frequency", show.frequency);
                     AddParameter(command, "@day", show.dayOfWeek); AddParameter(command, "@image", show.imagePath);
@@ -562,8 +578,10 @@ namespace WrestlingUniverse.Persistence
                 using (var command = CreateCommand(connection))
                 {
                     command.Transaction = transaction;
-                    command.CommandText = "INSERT OR REPLACE INTO specials(id, universe_id, name, month, week, day_of_week, image_path, created_utc, updated_utc) " +
-                                          "VALUES(@id, @universeId, @name, @month, @week, @day, @image, @created, @updated);";
+                    command.CommandText = "INSERT INTO specials(id, universe_id, name, month, week, day_of_week, image_path, created_utc, updated_utc) " +
+                        "VALUES(@id,@universeId,@name,@month,@week,@day,@image,@created,@updated) ON CONFLICT(id) DO UPDATE SET " +
+                        "name=excluded.name,month=excluded.month,week=excluded.week,day_of_week=excluded.day_of_week," +
+                        "image_path=excluded.image_path,updated_utc=excluded.updated_utc;";
                     AddParameter(command, "@id", special.id); AddParameter(command, "@universeId", special.universeId);
                     AddParameter(command, "@name", special.name); AddParameter(command, "@month", special.month);
                     AddParameter(command, "@week", special.week); AddParameter(command, "@day", special.dayOfWeek);
@@ -580,6 +598,37 @@ namespace WrestlingUniverse.Persistence
                 }
                 transaction.Commit();
             }
+        }
+
+        private void MigrateUniverseFromCatalogIfNeeded()
+        {
+            var catalog = UniverseStoragePaths.CatalogDatabase;
+            if (!File.Exists(catalog) || string.Equals(Path.GetFullPath(catalog), Path.GetFullPath(DatabasePath), StringComparison.OrdinalIgnoreCase)) return;
+            using (var connection = OpenConnection())
+            using (var count = CreateCommand(connection))
+            {
+                count.CommandText = "SELECT COUNT(*) FROM universes WHERE id=@id;";
+                AddParameter(count, "@id", isolatedUniverseId);
+                if (Convert.ToInt32(count.ExecuteScalar()) > 0) return;
+                Execute(connection, null, "ATTACH DATABASE '" + catalog.Replace("'", "''") + "' AS catalog;");
+                using (var transaction = connection.BeginTransaction())
+                {
+                    var id = isolatedUniverseId.Replace("'", "''");
+                    Execute(connection, transaction, "INSERT OR IGNORE INTO universes SELECT * FROM catalog.universes WHERE id='" + id + "';");
+                    foreach (var table in new[] { "wrestlers", "teams", "titles", "title_reigns", "locations", "brands", "tv_shows", "specials", "booked_matches", "booked_segments", "booked_show_cards", "booked_show_venues" })
+                        Execute(connection, transaction, "INSERT OR IGNORE INTO " + table + " SELECT * FROM catalog." + table + " WHERE universe_id='" + id + "';");
+                    Execute(connection, transaction, "INSERT OR IGNORE INTO team_members SELECT tm.* FROM catalog.team_members tm JOIN catalog.teams t ON t.id=tm.team_id WHERE t.universe_id='" + id + "';");
+                    Execute(connection, transaction, "INSERT OR IGNORE INTO tv_show_brands SELECT sb.* FROM catalog.tv_show_brands sb JOIN catalog.tv_shows s ON s.id=sb.show_id WHERE s.universe_id='" + id + "';");
+                    Execute(connection, transaction, "INSERT OR IGNORE INTO special_brands SELECT sb.* FROM catalog.special_brands sb JOIN catalog.specials s ON s.id=sb.special_id WHERE s.universe_id='" + id + "';");
+                    Execute(connection, transaction, "INSERT OR IGNORE INTO booked_match_participants SELECT p.* FROM catalog.booked_match_participants p JOIN catalog.booked_matches m ON m.id=p.match_id WHERE m.universe_id='" + id + "';");
+                    Execute(connection, transaction, "INSERT OR IGNORE INTO booked_segment_participants SELECT p.* FROM catalog.booked_segment_participants p JOIN catalog.booked_segments s ON s.id=p.segment_id WHERE s.universe_id='" + id + "';");
+                    Execute(connection, transaction, "INSERT OR IGNORE INTO booked_match_results SELECT r.* FROM catalog.booked_match_results r JOIN catalog.booked_matches m ON m.id=r.match_id WHERE m.universe_id='" + id + "';");
+                    transaction.Commit();
+                }
+                Execute(connection, null, "DETACH DATABASE catalog;");
+            }
+            var backup = Path.Combine(UniverseStoragePaths.GetBackups(isolatedUniverseId), "universe-migrated-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".db");
+            File.Copy(DatabasePath, backup, false);
         }
 
         public List<UI.TitleReignRecord> LoadTitleReigns(string titleId)
@@ -648,10 +697,15 @@ namespace WrestlingUniverse.Persistence
                 using (var command = CreateCommand(connection))
                 {
                     command.Transaction = transaction;
-                    command.CommandText = "INSERT OR REPLACE INTO booked_matches(id, universe_id, source_id, source_type, calendar_year, calendar_month, " +
+                    command.CommandText = "INSERT INTO booked_matches(id, universe_id, source_id, source_type, calendar_year, calendar_month, " +
                         "calendar_week, day_of_week, card_position, stipulation, format, title_id, stage_one_stipulation, stage_two_stipulation, " +
                         "stage_three_stipulation, created_utc, updated_utc) VALUES(@id,@universe,@source,@type,@year,@month,@week,@day,@position," +
-                        "@stipulation,@format,@title,@stageOne,@stageTwo,@stageThree,@created,@updated);";
+                        "@stipulation,@format,@title,@stageOne,@stageTwo,@stageThree,@created,@updated) ON CONFLICT(id) DO UPDATE SET " +
+                        "source_id=excluded.source_id,source_type=excluded.source_type,calendar_year=excluded.calendar_year," +
+                        "calendar_month=excluded.calendar_month,calendar_week=excluded.calendar_week,day_of_week=excluded.day_of_week," +
+                        "card_position=excluded.card_position,stipulation=excluded.stipulation,format=excluded.format,title_id=excluded.title_id," +
+                        "stage_one_stipulation=excluded.stage_one_stipulation,stage_two_stipulation=excluded.stage_two_stipulation," +
+                        "stage_three_stipulation=excluded.stage_three_stipulation,updated_utc=excluded.updated_utc;";
                     AddParameter(command, "@id", match.id); AddParameter(command, "@universe", match.universeId); AddParameter(command, "@source", match.sourceId);
                     AddParameter(command, "@type", match.sourceType); AddParameter(command, "@year", match.year); AddParameter(command, "@month", match.month);
                     AddParameter(command, "@week", match.week); AddParameter(command, "@day", match.dayOfWeek); AddParameter(command, "@position", match.cardPosition);
@@ -721,9 +775,12 @@ namespace WrestlingUniverse.Persistence
                 using (var command = CreateCommand(connection))
                 {
                     command.Transaction = transaction;
-                    command.CommandText = "INSERT OR REPLACE INTO booked_segments(id,universe_id,source_id,source_type,calendar_year,calendar_month," +
+                    command.CommandText = "INSERT INTO booked_segments(id,universe_id,source_id,source_type,calendar_year,calendar_month," +
                         "calendar_week,day_of_week,card_position,title,summary,created_utc,updated_utc) VALUES(@id,@universe,@source,@type,@year," +
-                        "@month,@week,@day,@position,@title,@summary,@created,@updated);";
+                        "@month,@week,@day,@position,@title,@summary,@created,@updated) ON CONFLICT(id) DO UPDATE SET " +
+                        "source_id=excluded.source_id,source_type=excluded.source_type,calendar_year=excluded.calendar_year," +
+                        "calendar_month=excluded.calendar_month,calendar_week=excluded.calendar_week,day_of_week=excluded.day_of_week," +
+                        "card_position=excluded.card_position,title=excluded.title,summary=excluded.summary,updated_utc=excluded.updated_utc;";
                     AddParameter(command, "@id", segment.id); AddParameter(command, "@universe", segment.universeId);
                     AddParameter(command, "@source", segment.sourceId); AddParameter(command, "@type", segment.sourceType);
                     AddParameter(command, "@year", segment.year); AddParameter(command, "@month", segment.month); AddParameter(command, "@week", segment.week);

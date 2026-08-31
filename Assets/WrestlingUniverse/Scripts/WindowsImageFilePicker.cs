@@ -66,20 +66,20 @@ namespace WrestlingUniverse.Platform
                 new[] { "Wrestling Universe roster", "wuroster", "All files", "*" });
             return !string.IsNullOrWhiteSpace(path);
 #elif UNITY_STANDALONE_WIN
-            return TryPickRosterPackageInWindowsPlayer(false, out path);
+            return TryPickRosterPackageInWindowsPlayer(false, string.Empty, out path);
 #else
             return false;
 #endif
         }
 
-        public static bool TryChooseRosterExportPath(string suggestedName, out string path)
+        public static bool TryChooseRosterExportPath(string suggestedName, string initialDirectory, out string path)
         {
             path = string.Empty;
 #if UNITY_EDITOR_WIN
-            path = UnityEditor.EditorUtility.SaveFilePanel("Export roster package", string.Empty, suggestedName, "wuroster");
+            path = UnityEditor.EditorUtility.SaveFilePanel("Export roster package", initialDirectory, suggestedName, "wuroster");
             return !string.IsNullOrWhiteSpace(path);
 #elif UNITY_STANDALONE_WIN
-            if (!TryPickRosterPackageInWindowsPlayer(true, out path)) return false;
+            if (!TryPickRosterPackageInWindowsPlayer(true, initialDirectory, out path)) return false;
             if (!path.EndsWith(".wuroster", StringComparison.OrdinalIgnoreCase)) path += ".wuroster";
             return true;
 #else
@@ -88,10 +88,10 @@ namespace WrestlingUniverse.Platform
         }
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-        private static bool TryPickRosterPackageInWindowsPlayer(bool save, out string path)
+        private static bool TryPickRosterPackageInWindowsPlayer(bool save, string initialDirectory, out string path)
         {
             const int maxPathCharacters = 4096;
-            path = string.Empty; var filter = IntPtr.Zero; var file = IntPtr.Zero; var title = IntPtr.Zero; var extension = IntPtr.Zero;
+            path = string.Empty; var filter = IntPtr.Zero; var file = IntPtr.Zero; var title = IntPtr.Zero; var extension = IntPtr.Zero; var initial = IntPtr.Zero;
             try
             {
                 filter = Marshal.StringToHGlobalUni("Wrestling Universe Roster\0*.wuroster\0All Files\0*.*\0\0");
@@ -99,8 +99,9 @@ namespace WrestlingUniverse.Platform
                 for (var offset = 0; offset < maxPathCharacters * sizeof(char); offset += sizeof(long)) Marshal.WriteInt64(file, offset, 0L);
                 title = Marshal.StringToHGlobalUni(save ? "Export roster package" : "Import roster package");
                 extension = Marshal.StringToHGlobalUni("wuroster");
+                if (!string.IsNullOrEmpty(initialDirectory)) initial = Marshal.StringToHGlobalUni(initialDirectory);
                 var dialog = new OpenFileNameNative { structSize = (uint)Marshal.SizeOf(typeof(OpenFileNameNative)), filter = filter,
-                    filterIndex = 1, file = file, maxFile = maxPathCharacters, title = title, defaultExtension = extension,
+                    filterIndex = 1, file = file, maxFile = maxPathCharacters, initialDirectory = initial, title = title, defaultExtension = extension,
                     flags = save ? 0x00000002u | 0x00000800u | 0x00000008u : 0x00001000u | 0x00000800u | 0x00000008u };
                 var accepted = save ? GetSaveFileNameNative(ref dialog) : GetOpenFileNameNative(ref dialog);
                 if (!accepted) return false;
@@ -110,6 +111,7 @@ namespace WrestlingUniverse.Platform
             {
                 if (filter != IntPtr.Zero) Marshal.FreeHGlobal(filter); if (file != IntPtr.Zero) Marshal.FreeHGlobal(file);
                 if (title != IntPtr.Zero) Marshal.FreeHGlobal(title); if (extension != IntPtr.Zero) Marshal.FreeHGlobal(extension);
+                if (initial != IntPtr.Zero) Marshal.FreeHGlobal(initial);
             }
         }
 

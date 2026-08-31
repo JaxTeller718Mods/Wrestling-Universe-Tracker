@@ -7,6 +7,36 @@ using UnityEngine;
 
 namespace WrestlingUniverse.Persistence
 {
+    public static class UniverseStoragePaths
+    {
+        public static string CatalogDatabase => Path.Combine(Application.persistentDataPath, "wrestling-universe.db");
+        public static string GetRoot(string id) => Path.Combine(Application.persistentDataPath, "Promotions", Validate(id));
+        public static string GetDatabase(string id) => Path.Combine(GetRoot(id), "universe.db");
+        public static string GetImages(string id) => Path.Combine(GetRoot(id), "Images");
+        public static string GetExports(string id) => Path.Combine(GetRoot(id), "Exports");
+        public static string GetBackups(string id) => Path.Combine(GetRoot(id), "Backups");
+
+        public static void EnsureDirectories(string id)
+        {
+            Directory.CreateDirectory(GetImages(id)); Directory.CreateDirectory(GetExports(id)); Directory.CreateDirectory(GetBackups(id));
+            var legacy = Path.Combine(Application.persistentDataPath, "UniverseImages", id);
+            if (!Directory.Exists(legacy)) return;
+            foreach (var source in Directory.GetFiles(legacy))
+            {
+                var destination = Path.Combine(GetImages(id), Path.GetFileName(source));
+                if (!File.Exists(destination)) File.Copy(source, destination, false);
+            }
+        }
+
+        private static string Validate(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("A universe id is required.", nameof(id));
+            foreach (var character in id) if (!char.IsLetterOrDigit(character) && character != '-' && character != '_')
+                throw new ArgumentException("The universe id contains invalid path characters.", nameof(id));
+            return id;
+        }
+    }
+
     public static class UniverseImageStorage
     {
         private const long MaximumImageBytes = 20 * 1024 * 1024;
@@ -26,6 +56,8 @@ namespace WrestlingUniverse.Persistence
 
             var directory = Path.Combine(Application.persistentDataPath, "UniverseImages", universeId);
             Directory.CreateDirectory(directory);
+            directory = UniverseStoragePaths.GetImages(universeId);
+            Directory.CreateDirectory(directory);
             foreach (var oldPath in Directory.GetFiles(directory, imageRole + ".*"))
                 if (!string.Equals(oldPath, Path.Combine(directory, imageRole + extension), StringComparison.OrdinalIgnoreCase))
                     File.Delete(oldPath);
@@ -42,6 +74,8 @@ namespace WrestlingUniverse.Persistence
             if (extension != ".png" && extension != ".jpg" && extension != ".jpeg" && extension != ".bmp")
                 throw new InvalidOperationException("Roster packages may only contain PNG, JPG, JPEG, or BMP images.");
             var directory = Path.Combine(Application.persistentDataPath, "UniverseImages", universeId);
+            Directory.CreateDirectory(directory);
+            directory = UniverseStoragePaths.GetImages(universeId);
             Directory.CreateDirectory(directory);
             var destination = Path.Combine(directory, imageRole + extension);
             File.WriteAllBytes(destination, data);
