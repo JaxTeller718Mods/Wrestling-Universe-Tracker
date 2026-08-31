@@ -268,6 +268,7 @@ namespace WrestlingUniverse.UI
             AddCardImage(card.transform, "OwnerPortrait", draft.ownerImagePath, new Vector2(.70f, .55f), new Vector2(.82f, .92f));
             AddCardImage(card.transform, "PromotionLogo", draft.promotionImagePath, new Vector2(.83f, .55f), new Vector2(.95f, .92f));
             AddManageButton(card.transform, draft);
+            AddDeleteButton(card.transform, draft);
         }
 
         private void AddManageButton(Transform card, UniverseDraft draft)
@@ -283,7 +284,7 @@ namespace WrestlingUniverse.UI
                 buttonObject.transform.SetParent(card, false);
                 var rect = buttonObject.GetComponent<RectTransform>();
                 rect.anchorMin = new Vector2(.06f, .04f);
-                rect.anchorMax = new Vector2(.57f, .19f);
+                rect.anchorMax = new Vector2(.40f, .19f);
                 rect.offsetMin = Vector2.zero;
                 rect.offsetMax = Vector2.zero;
                 buttonObject.GetComponent<Image>().color = new Color32(25, 45, 65, 255);
@@ -323,8 +324,8 @@ namespace WrestlingUniverse.UI
                 buttonObject = new GameObject("LoadButton", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
                 buttonObject.transform.SetParent(card, false);
                 var rect = buttonObject.GetComponent<RectTransform>();
-                rect.anchorMin = new Vector2(.59f, .04f);
-                rect.anchorMax = new Vector2(.94f, .19f);
+                rect.anchorMin = new Vector2(.42f, .04f);
+                rect.anchorMax = new Vector2(.74f, .19f);
                 rect.offsetMin = Vector2.zero;
                 rect.offsetMax = Vector2.zero;
                 buttonObject.GetComponent<Image>().color = new Color32(240, 190, 42, 255);
@@ -352,6 +353,82 @@ namespace WrestlingUniverse.UI
             var button = buttonObject.GetComponent<Button>();
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(() => LoadUniverse(draft.id));
+        }
+
+        private void AddDeleteButton(Transform card, UniverseDraft draft)
+        {
+            var existing = card.Find("DeleteButton");
+            var buttonObject = existing == null
+                ? new GameObject("DeleteButton", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button))
+                : existing.gameObject;
+            if (existing == null)
+            {
+                buttonObject.transform.SetParent(card, false);
+                var rect = buttonObject.GetComponent<RectTransform>();
+                rect.anchorMin = new Vector2(.76f, .04f); rect.anchorMax = new Vector2(.94f, .19f);
+                rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
+                buttonObject.GetComponent<Image>().color = new Color32(120, 35, 42, 255);
+                var labelObject = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+                labelObject.transform.SetParent(buttonObject.transform, false);
+                var labelRect = labelObject.GetComponent<RectTransform>(); labelRect.anchorMin = Vector2.zero; labelRect.anchorMax = Vector2.one;
+                labelRect.offsetMin = Vector2.zero; labelRect.offsetMax = Vector2.zero;
+                var label = labelObject.GetComponent<Text>(); label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                label.fontSize = 16; label.resizeTextForBestFit = true; label.resizeTextMinSize = 11; label.resizeTextMaxSize = 16;
+                label.fontStyle = FontStyle.Bold; label.alignment = TextAnchor.MiddleCenter;
+                label.color = Color.white; label.text = "DELETE";
+            }
+            var button = buttonObject.GetComponent<Button>(); button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() => ArmDelete(buttonObject, draft));
+        }
+
+        private void ArmDelete(GameObject buttonObject, UniverseDraft draft)
+        {
+            var label = buttonObject.transform.Find("Label").GetComponent<Text>();
+            if (label.text != "CONFIRM DELETE")
+            {
+                label.text = "CONFIRM DELETE";
+                buttonObject.GetComponent<Image>().color = new Color32(190, 38, 48, 255);
+                StartCoroutine(ResetDeleteButton(buttonObject, 5f));
+                return;
+            }
+            DeleteUniverse(draft);
+        }
+
+        private System.Collections.IEnumerator ResetDeleteButton(GameObject buttonObject, float delay)
+        {
+            yield return new WaitForSecondsRealtime(delay);
+            if (buttonObject == null) yield break;
+            var label = buttonObject.transform.Find("Label");
+            if (label != null) label.GetComponent<Text>().text = "DELETE";
+            var image = buttonObject.GetComponent<Image>(); if (image != null) image.color = new Color32(120, 35, 42, 255);
+        }
+
+        private void DeleteUniverse(UniverseDraft draft)
+        {
+            try
+            {
+                UniverseStoragePaths.DeleteAll(draft.id);
+                repository.Delete(draft.id);
+                universes.RemoveAll(item => item.id == draft.id);
+                GameObject card;
+                if (cardsByUniverseId.TryGetValue(draft.id, out card)) Destroy(card);
+                cardsByUniverseId.Remove(draft.id);
+                for (var index = 0; index < universes.Count; index++)
+                {
+                    GameObject remaining;
+                    if (cardsByUniverseId.TryGetValue(universes[index].id, out remaining))
+                    {
+                        remaining.name = "UniverseCard_" + (index + 1);
+                        PopulateUniverseCard(remaining, universes[index], index + 1);
+                    }
+                }
+                RefreshSummary();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                if (validationText != null) validationText.text = "The universe could not be completely deleted. Check the Console.";
+            }
         }
 
         private static void LoadUniverse(string universeId)

@@ -16,6 +16,21 @@ namespace WrestlingUniverse.Persistence
         public static string GetExports(string id) => Path.Combine(GetRoot(id), "Exports");
         public static string GetBackups(string id) => Path.Combine(GetRoot(id), "Backups");
 
+        public static void DeleteAll(string id)
+        {
+            var root = Path.GetFullPath(GetRoot(id));
+            var promotionsRoot = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "Promotions")) + Path.DirectorySeparatorChar;
+            if (!root.StartsWith(promotionsRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Refusing to delete storage outside the Promotions directory.");
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+
+            var legacy = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "UniverseImages", Validate(id)));
+            var legacyRoot = Path.GetFullPath(Path.Combine(Application.persistentDataPath, "UniverseImages")) + Path.DirectorySeparatorChar;
+            if (!legacy.StartsWith(legacyRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Refusing to delete storage outside the legacy image directory.");
+            if (Directory.Exists(legacy)) Directory.Delete(legacy, true);
+        }
+
         public static void EnsureDirectories(string id)
         {
             Directory.CreateDirectory(GetImages(id)); Directory.CreateDirectory(GetExports(id)); Directory.CreateDirectory(GetBackups(id));
