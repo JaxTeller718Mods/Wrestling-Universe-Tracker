@@ -190,6 +190,7 @@ namespace WrestlingUniverse.UI
         private InputField segmentTitleInput;
         private InputField segmentSummaryInput;
         private GameObject segmentParticipantMenu;
+        private RectTransform segmentParticipantContent;
         private Text segmentParticipantCaption;
         private Text segmentValidationText;
         private Text addSegmentToCardLabel;
@@ -851,7 +852,18 @@ namespace WrestlingUniverse.UI
             segmentParticipantMenu = CreateRuntimePanel("SegmentParticipantDropdown", segmentParticipantSelector.transform, new Color32(5, 9, 20, 255),
                 new Vector2(0, 1f), new Vector2(1, 3.5f));
             var segmentParticipantCanvas = segmentParticipantMenu.AddComponent<Canvas>(); segmentParticipantCanvas.overrideSorting = true; segmentParticipantCanvas.sortingOrder = 510;
-            segmentParticipantMenu.AddComponent<GraphicRaycaster>(); segmentParticipantMenu.SetActive(false);
+            segmentParticipantMenu.AddComponent<GraphicRaycaster>(); segmentParticipantMenu.AddComponent<RectMask2D>();
+            var segmentParticipantScroll = segmentParticipantMenu.AddComponent<ScrollRect>();
+            segmentParticipantScroll.horizontal = false; segmentParticipantScroll.vertical = true;
+            segmentParticipantScroll.movementType = ScrollRect.MovementType.Clamped; segmentParticipantScroll.scrollSensitivity = 8f;
+            var segmentParticipantContentObject = new GameObject("SegmentParticipantContent", typeof(RectTransform));
+            segmentParticipantContentObject.transform.SetParent(segmentParticipantMenu.transform, false);
+            segmentParticipantContent = segmentParticipantContentObject.GetComponent<RectTransform>();
+            segmentParticipantContent.anchorMin = new Vector2(0, 1); segmentParticipantContent.anchorMax = new Vector2(1, 1);
+            segmentParticipantContent.pivot = new Vector2(.5f, 1); segmentParticipantContent.anchoredPosition = Vector2.zero;
+            segmentParticipantScroll.viewport = segmentParticipantMenu.GetComponent<RectTransform>();
+            segmentParticipantScroll.content = segmentParticipantContent;
+            segmentParticipantMenu.SetActive(false);
             segmentSummaryInput = CreateRuntimeInput("SegmentSummary", segmentBookingBody.transform, "SEGMENT SUMMARY", "Describe what happens during this segment...",
                 new Vector2(.035f, .22f), new Vector2(.965f, .55f));
             segmentSummaryInput.lineType = InputField.LineType.MultiLineNewline;
@@ -2164,6 +2176,45 @@ namespace WrestlingUniverse.UI
         }
 
         private void RefreshSegmentParticipants()
+        {
+            if (repository == null || segmentParticipantMenu == null || segmentParticipantContent == null) return;
+            availableSegmentParticipants = repository.LoadWrestlers(ActiveUniverseSession.UniverseId).FindAll(wrestler =>
+                activeBookingBrandNames.Count == 0 || activeBookingBrandNames.Contains(wrestler.brand));
+            selectedSegmentParticipantIds.RemoveAll(id => availableSegmentParticipants.Find(wrestler => wrestler.id == id) == null);
+            for (var index = segmentParticipantContent.childCount - 1; index >= 0; index--)
+            {
+                var oldRow = segmentParticipantContent.GetChild(index).gameObject;
+                oldRow.SetActive(false); Destroy(oldRow);
+            }
+            const float rowHeight = 38f;
+            segmentParticipantContent.sizeDelta = new Vector2(0, Mathf.Max(rowHeight, availableSegmentParticipants.Count * rowHeight));
+            for (var index = 0; index < availableSegmentParticipants.Count; index++)
+            {
+                var wrestler = availableSegmentParticipants[index];
+                var selected = selectedSegmentParticipantIds.Contains(wrestler.id);
+                var row = CreateRuntimeButton("SegmentParticipant_" + wrestler.id, segmentParticipantContent, string.Empty,
+                    Vector2.zero, Vector2.one, selected ? new Color32(55, 38, 78, 255) : new Color32(9, 15, 29, 255), Color.white);
+                var rowRect = row.GetComponent<RectTransform>();
+                rowRect.anchorMin = new Vector2(.015f, 1); rowRect.anchorMax = new Vector2(.985f, 1);
+                rowRect.pivot = new Vector2(.5f, 1); rowRect.anchoredPosition = new Vector2(0, -index * rowHeight);
+                rowRect.sizeDelta = new Vector2(0, rowHeight);
+                var defaultLabel = row.transform.Find("Label"); if (defaultLabel != null) defaultLabel.gameObject.SetActive(false);
+                row.onClick.AddListener(() => ToggleSegmentParticipant(wrestler.id));
+                var label = CreateRuntimeText("SegmentParticipantLabel_" + wrestler.id, segmentParticipantContent,
+                    (selected ? "SELECTED  /  " : string.Empty) + wrestler.name, 15, Color.white, TextAnchor.MiddleLeft,
+                    Vector2.zero, Vector2.one, selected ? FontStyle.Bold : FontStyle.Normal);
+                var labelRect = label.rectTransform;
+                labelRect.anchorMin = new Vector2(.055f, 1); labelRect.anchorMax = new Vector2(.96f, 1);
+                labelRect.pivot = new Vector2(.5f, 1); labelRect.anchoredPosition = new Vector2(0, -index * rowHeight);
+                labelRect.sizeDelta = new Vector2(0, rowHeight); label.raycastTarget = false;
+            }
+            if (availableSegmentParticipants.Count == 0)
+                CreateRuntimeText("NoSegmentParticipants", segmentParticipantContent, "No wrestlers are available for this show", 13,
+                    new Color32(142, 160, 181, 255), TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+            UpdateSegmentParticipantCaption(); Canvas.ForceUpdateCanvases();
+        }
+
+        private void RefreshSegmentParticipantsLegacy()
         {
             if (repository == null || segmentParticipantMenu == null) return;
             availableSegmentParticipants = repository.LoadWrestlers(ActiveUniverseSession.UniverseId).FindAll(wrestler =>
