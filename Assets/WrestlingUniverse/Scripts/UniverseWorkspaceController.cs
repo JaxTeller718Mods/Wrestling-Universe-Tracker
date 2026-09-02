@@ -194,6 +194,10 @@ namespace WrestlingUniverse.UI
         private Text segmentParticipantCaption;
         private Text segmentValidationText;
         private Text addSegmentToCardLabel;
+        private GameObject segmentRecapReader;
+        private Text segmentRecapReaderTitle;
+        private Text segmentRecapReaderText;
+        private ScrollRect segmentRecapReaderScroll;
         private readonly List<string> selectedSegmentParticipantIds = new List<string>();
         private List<WrestlerRecord> availableSegmentParticipants = new List<WrestlerRecord>();
         private BookedSegmentRecord editingBookedSegment;
@@ -2441,8 +2445,14 @@ namespace WrestlingUniverse.UI
                 }
                 CreateRuntimeText("RecapLabel", body.transform, "SEGMENT RECAP", 11, new Color32(185, 103, 255, 255), TextAnchor.MiddleLeft,
                     new Vector2(.61f, .82f), new Vector2(.96f, .94f), FontStyle.Bold);
-                CreateRuntimeText("Recap", body.transform, segment.summary, 12, new Color32(205, 210, 220, 255), TextAnchor.UpperLeft,
+                var recapText = CreateRuntimeText("Recap", body.transform, segment.summary, 12, new Color32(205, 210, 220, 255), TextAnchor.UpperLeft,
                     new Vector2(.61f, .22f), new Vector2(.96f, .82f));
+                recapText.supportRichText = false;
+                var recapButton = recapText.gameObject.AddComponent<Button>(); recapButton.targetGraphic = recapText;
+                recapButton.transition = Selectable.Transition.None;
+                recapButton.onClick.AddListener(() => OpenSegmentRecap(segment));
+                CreateRuntimeText("ReadFullRecap", body.transform, "CLICK RECAP TO READ FULL SCRIPT", 10,
+                    new Color32(185, 103, 255, 255), TextAnchor.MiddleLeft, new Vector2(.61f, .15f), new Vector2(.96f, .22f), FontStyle.Bold);
                 var edit = CreateRuntimeButton("Edit", body.transform, "EDIT", new Vector2(.03f, .025f), new Vector2(.28f, .14f),
                     new Color32(45, 34, 70, 255), Color.white); edit.onClick.AddListener(() => EditBookedSegment(segment));
                 var delete = CreateRuntimeButton("Delete", body.transform, "DELETE SEGMENT", new Vector2(.72f, .025f), new Vector2(.97f, .14f),
@@ -2504,6 +2514,59 @@ namespace WrestlingUniverse.UI
         {
             if (!expandedBookedSegmentIds.Add(segmentId)) expandedBookedSegmentIds.Remove(segmentId);
             RefreshBookedMatchCards();
+        }
+
+        private void OpenSegmentRecap(BookedSegmentRecord segment)
+        {
+            EnsureSegmentRecapReader();
+            segmentRecapReaderTitle.text = segment.title.ToUpperInvariant() + "  /  FULL SEGMENT RECAP";
+            segmentRecapReaderText.text = segment.summary ?? string.Empty;
+            segmentRecapReader.SetActive(true); segmentRecapReader.transform.SetAsLastSibling();
+            Canvas.ForceUpdateCanvases();
+            var textRect = segmentRecapReaderText.rectTransform;
+            var viewportHeight = segmentRecapReaderScroll.viewport.rect.height;
+            textRect.sizeDelta = new Vector2(0, Mathf.Max(viewportHeight, segmentRecapReaderText.preferredHeight + 40f));
+            Canvas.ForceUpdateCanvases(); segmentRecapReaderScroll.verticalNormalizedPosition = 1f;
+        }
+
+        private void EnsureSegmentRecapReader()
+        {
+            if (segmentRecapReader != null) return;
+            var root = promotionNameText != null ? promotionNameText.transform.root : transform.root;
+            segmentRecapReader = CreateRuntimePanel("SegmentRecapReader", root, new Color32(1, 3, 9, 245), Vector2.zero, Vector2.one);
+            var canvas = segmentRecapReader.AddComponent<Canvas>(); canvas.overrideSorting = true; canvas.sortingOrder = 1000;
+            segmentRecapReader.AddComponent<GraphicRaycaster>();
+            var dialog = CreateRuntimePanel("Dialog", segmentRecapReader.transform, new Color32(10, 13, 26, 255),
+                new Vector2(.09f, .07f), new Vector2(.91f, .93f));
+            segmentRecapReaderTitle = CreateRuntimeText("Title", dialog.transform, "FULL SEGMENT RECAP", 22, Color.white,
+                TextAnchor.MiddleLeft, new Vector2(.045f, .87f), new Vector2(.78f, .97f), FontStyle.Bold);
+            CreateRuntimeText("ReaderHelp", dialog.transform, "COMPLETE SAVED SEGMENT SCRIPT", 12,
+                new Color32(185, 103, 255, 255), TextAnchor.MiddleLeft, new Vector2(.045f, .82f), new Vector2(.78f, .88f), FontStyle.Bold);
+            var close = CreateRuntimeButton("Close", dialog.transform, "CLOSE", new Vector2(.80f, .87f), new Vector2(.955f, .97f),
+                new Color32(45, 34, 70, 255), Color.white);
+            close.onClick.AddListener(CloseSegmentRecap);
+
+            var viewport = CreateRuntimePanel("RecapViewport", dialog.transform, new Color32(5, 9, 20, 255),
+                new Vector2(.045f, .07f), new Vector2(.955f, .79f));
+            viewport.AddComponent<RectMask2D>();
+            segmentRecapReaderScroll = viewport.AddComponent<ScrollRect>();
+            segmentRecapReaderScroll.horizontal = false; segmentRecapReaderScroll.vertical = true;
+            segmentRecapReaderScroll.movementType = ScrollRect.MovementType.Clamped; segmentRecapReaderScroll.scrollSensitivity = 8f;
+            segmentRecapReaderScroll.viewport = viewport.GetComponent<RectTransform>();
+            segmentRecapReaderText = CreateRuntimeText("CompleteRecap", viewport.transform, string.Empty, 16,
+                new Color32(225, 229, 238, 255), TextAnchor.UpperLeft, new Vector2(.025f, 1), new Vector2(.975f, 1));
+            segmentRecapReaderText.supportRichText = false;
+            segmentRecapReaderText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            segmentRecapReaderText.verticalOverflow = VerticalWrapMode.Overflow;
+            var textRect = segmentRecapReaderText.rectTransform;
+            textRect.pivot = new Vector2(.5f, 1); textRect.anchoredPosition = Vector2.zero; textRect.sizeDelta = new Vector2(0, 600f);
+            segmentRecapReaderScroll.content = textRect;
+            segmentRecapReader.SetActive(false);
+        }
+
+        private void CloseSegmentRecap()
+        {
+            if (segmentRecapReader != null) segmentRecapReader.SetActive(false);
         }
 
         private void EditBookedSegment(BookedSegmentRecord segment)
